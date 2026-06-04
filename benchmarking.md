@@ -3,48 +3,24 @@
 ## hyperfine
 
 ```bash
-# Install
 scoop install hyperfine
 
-# Basic benchmark
-hyperfine "./myapp"
-
-# Warmup + min runs
-hyperfine --warmup 5 --min-runs 20 "./myapp"
-
-# Compare two versions
-hyperfine "./build/old/myapp" "./build/new/myapp"
-
-# Parameter sweep
-hyperfine --parameter-scan buffer 1024 65536 --style exponential "./myapp --buffer-size {buffer}"
-
-# Prepare (build) before each run
-hyperfine --prepare "cmake --build build" "./build/myapp --bench"
-
-# Export results
-hyperfine --export-json results.json "./myapp"
-hyperfine --export-markdown results.md "./myapp"
-hyperfine --export-csv results.csv "./myapp"
-
-# Compare with baseline (statistical)
-hyperfine "./baseline" "./candidate"
-# Output shows: which is faster, by how much, confidence
+hyperfine './myapp'                                        # basic
+hyperfine --warmup 5 --min-runs 20 './myapp'                # proper
+hyperfine './old' './new'                                   # compare
+hyperfine --prepare 'cmake --build build' './myapp --bench' # build first
+hyperfine --export-markdown results.md './myapp'            # export
 ```
 
-### Output interpretation
+### Output
 
 ```
 Benchmark 1: ./myapp
   Time (mean ± σ):      45.2 ms ±   2.1 ms    [User: 32.1 ms, System: 8.3 ms]
   Range (min … max):    42.1 ms …  52.3 ms    100 runs
-
-  ⚠️ Warning: outliers detected (5)
-
-# Key stats:
-# mean ± σ  — main result, σ = standard deviation
-# Range     — best vs worst case
-# Outliers  — potential interference (close other apps)
 ```
+
+Mean ± σ is the main result. Range shows best/worst. Outliers flagged.
 
 ## Google Benchmark
 
@@ -64,8 +40,7 @@ static void BM_VectorPush(benchmark::State& state) {
     for (auto _ : state) {
         std::vector<int> v;
         v.reserve(state.range(0));
-        for (int i = 0; i < state.range(0); ++i)
-            v.push_back(i);
+        for (int i = 0; i < state.range(0); ++i) v.push_back(i);
         benchmark::DoNotOptimize(v);
     }
 }
@@ -74,77 +49,43 @@ BENCHMARK(BM_VectorPush)->Range(8, 8<<10);
 BENCHMARK_MAIN();
 ```
 
-### CMake integration
-
 ```cmake
-FetchContent_Declare(
-    benchmark
-    GIT_REPOSITORY https://github.com/google/benchmark.git
-    GIT_TAG v1.9.0
-)
+FetchContent_Declare(benchmark GIT_REPOSITORY https://github.com/google/benchmark.git GIT_TAG v1.9.0)
 FetchContent_MakeAvailable(benchmark)
-
-target_link_libraries(my_benchmarks PRIVATE benchmark::benchmark)
+target_link_libraries(mybench PRIVATE benchmark::benchmark)
 ```
 
-## Quick micro-benchmarks with chrono
+## Quick micro-benchmark
 
 ```cpp
 #include <chrono>
-#include <iostream>
-
 template<typename F>
-auto measure(F&& f, int iterations = 1000000) {
+auto measure(F&& f, int n = 1'000'000) {
     auto start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < iterations; ++i) {
-        f();
-    }
+    for (int i = 0; i < n; ++i) f();
     auto end = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() / iterations;
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() / n;
 }
-
-// Usage:
-auto ns_per_call = measure([] { some_operation(); });
-std::cout << ns_per_call << " ns/call\n";
+// Usage: auto ns = measure([]{ do_work(); });
 ```
 
-## Benchmarking compilation
+## Compilation benchmarking
 
 ```bash
-# Time a full rebuild
-hyperfine --prepare "rm -rf build && cmake -B build -G Ninja" "cmake --build build" --warmup 1
+# Full rebuild time
+hyperfine --prepare 'rm -rf build && cmake -B build -G Ninja' 'cmake --build build' --warmup 1
 
-# Time incremental rebuild after touching one file
-hyperfine --prepare "cmake --build build && touch src/main.cpp" "cmake --build build" --warmup 2
+# Incremental rebuild (touch one file)
+hyperfine --prepare 'cmake --build build && touch src/main.cpp' 'cmake --build build' --warmup 2
 ```
 
-## Tracy for production profiling
+## Checklist
 
-Not a benchmark per se, but gives you real-world performance data:
-- Which functions take the most time
-- Mutex contention
-- Memory allocation patterns
-- Frame timing
-
-See [debugging-profiling.md](debugging-profiling.md) for Tracy setup.
-
-## perf (Linux) / ETW (Windows)
-
-```bash
-# Linux
-perf record ./myapp
-perf report
-
-# Windows — use Tracy or Perfetto instead
-# Or: xperf / ETW (complex)
-```
-
-## Benchmarking checklist
-
-1. **Warmup** — always warm up (cache, branch predictor)
+1. **Warmup** — always warm up (caches, branch predictor)
 2. **Multiple runs** — at least 10, ideally 30+
-3. **No other apps** — close browsers, Discord, etc.
-4. **Same conditions** — same CPU governor, no thermal throttling
-5. **Compare statistically** — hyperfine does this automatically
-6. **Prevent optimization** — use `benchmark::DoNotOptimize()` or I/O
-7. **Measure the right thing** — real workload, not synthetic loops
+3. **Quiet system** — close browsers, Discord, etc.
+4. **Same conditions** — no thermal throttling, same CPU governor
+5. **Prevent optimization** — use `benchmark::DoNotOptimize()`
+6. **Measure the real thing** — not synthetic loops
+
+> 💡 **Tip:** hyperfine is for CLI apps, Google Benchmark for micro-benchmarks, Tracy for whole-system profiling.

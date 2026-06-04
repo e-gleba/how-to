@@ -1,197 +1,99 @@
 # Binary Tools
 
-## UPX — executable compressor
+## UPX — compress executables
 
 ```bash
-# Install
-scoop install upx
-
-# Compress executable
-upx --best myapp.exe
-
-# List compressed info
-upx -l myapp.exe
-
-# Decompress
-upx -d myapp.exe
-
-# Test compression (don't modify)
-upx -t myapp.exe
-
-# Force compression (even for large files)
-upx --best --force myapp.exe
+upx --best myapp.exe         # compress
+upx -l myapp.exe             # info
+upx -d myapp.exe             # decompress
+strip myapp.exe && upx --best myapp.exe   # strip + pack
 ```
 
-**Warning:** UPX-packed binaries can trigger antivirus false positives. Always test after packing. Don't pack debug builds.
+⚠️ Can trigger AV false positives. Always test after packing. Don't pack debug builds.
 
-Typical compression ratios:
-- C++ Release binary: 40-60% reduction
-- With debug symbols: 60-80% (strip first!)
-
-## Strip + pack pipeline
+## pe-bear — PE viewer
 
 ```bash
-# Strip debug symbols (if you don't need them)
-strip myapp.exe
-
-# Then compress
-upx --best myapp.exe
-```
-
-## pe-bear — PE Viewer
-
-```bash
-# Installed via scoop: pe-bear
 pe-bear myapp.exe
 ```
 
-Use for:
-- Inspect DLL imports/exports
-- View PE sections (.text, .data, .rdata)
-- Check compiler/linker version
-- Verify ASLR, DEP, other security flags
-- Check TLS callbacks
-- Resource viewer
+Inspect: sections, imports/exports, security flags (ASLR, DEP), compiler version, TLS callbacks.
 
-## depends — Dependency Walker
+## depends — DLL dependencies
 
 ```bash
-# Installed via scoop: depends
 depends myapp.exe
 ```
 
-Shows:
-- Which DLLs your binary links against
-- Missing DLLs (highlighted in red)
-- Import/export functions per DLL
-- Delay-loaded dependencies
+Shows: required DLLs, missing DLLs (red), import/export functions.
 
-## ImHex — Hex Editor
+## ImHex — hex editor
 
 ```bash
-# Installed via scoop: imhex
 imhex myapp.exe
 ```
 
-Features:
-- Pattern language for structure definitions
-- Disassembler view
-- Data inspector (decode values at cursor)
-- Diffing
-- Bookmarks + annotations
-- Dark theme
+Pattern language for structure definitions, disassembler, data inspector, diffing.
 
 ## Sysinternals
 
 ```bash
-# Installed via scoop: sysinternals
-
-# Process Monitor — see file/registry/network activity
-procmon
-
-# Process Explorer — detailed process info
-procexp
-
-# Strings — extract strings from binary
-strings myapp.exe
-strings -n 8 myapp.exe  # min length 8
-strings myapp.exe | rg "http"  # find URLs
-
-# Handle — see open handles
-handle -p myapp.exe
-
-# ListDLLs — see loaded DLLs at runtime
-listdlls myapp.exe
+strings myapp.exe                # extract strings
+strings -n 8 myapp.exe           # min length 8
+strings myapp.exe | rg "http"    # find URLs
+procmon                           # file/registry/network monitor
+procexp                           # process explorer
+handle -p myapp.exe               # open handles
 ```
 
 ## radare2 / cutter
 
 ```bash
-# Install
-scoop install radare2 cutter
+r2 -A myapp.exe    # auto-analyze
+# Inside: aaaa (full analysis), afl (functions), iz (strings), ii (imports), VV (graph)
 
-# Quick binary analysis
-r2 -A myapp.exe  # auto-analyze
-
-# Inside r2:
-# aaaa  — full analysis
-# afl   — list functions
-# iz    — list strings
-# ii    — imports
-# ie    — entry points
-# VV    — visual mode (graph view)
-# pdf @main  — disassemble function
-
-# Cutter (GUI)
-cutter myapp.exe
+cutter myapp.exe   # GUI
 ```
 
 ## Ghidra
 
 ```bash
-# Installed via scoop: ghidra
 # Launch from Start Menu
 ```
 
-Full reverse engineering suite:
-- Decompiler (machine code → C)
-- Function graph
-- Cross-references
-- Type recovery
-- Scripting (Python/Java)
-- Diffing
-
-## x64dbg scripting
-
-```
-// x64dbg script — find all calls to a function
-// Save as script.txt, run from x64dbg
-findall call, function_address
-```
+Full decompiler (machine code → C), function graphs, cross-references, scripting.
 
 ## cheat-engine
 
 ```bash
-# Installed via scoop: cheat-engine
-# GUI tool for memory scanning/editing at runtime
+# GUI — memory scanner/editor at runtime
 ```
 
-Useful for:
-- Finding memory addresses of variables at runtime
-- Understanding memory layout of your app
-- Reverse engineering game state
+Useful for: finding variable addresses, understanding memory layout.
 
-## Binary diffing
+## Pre-ship checklist
 
 ```bash
-# Compare two builds
-# Windows
-fc /b old.exe new.exe
-
-# Better: use hex editor diff feature
-imhex old.exe
-# then File → Compare → new.exe
-```
-
-## Useful checks before shipping
-
-```bash
-# 1. Check dynamic dependencies
+# 1. DLL dependencies
 depends myapp.exe
 
-# 2. Check security features
-pe-bear myapp.exe
-# Look for: ASLR (DYNAMIC_BASE), DEP (NX_COMPAT)
+# 2. Security flags
+pe-bear myapp.exe   # check ASLR (DYNAMIC_BASE), DEP (NX_COMPAT)
 
-# 3. Check for debug symbols leakage
+# 3. Debug symbol leakage
 strings myapp.exe | rg "\.pdb"
 
-# 4. Check for hardcoded secrets
+# 4. Hardcoded secrets
 strings myapp.exe | rg -i "password|secret|token|key"
 
-# 5. Check file size
+# 5. File size
 ls -lh myapp.exe
 
-# 6. Check import table for suspicious DLLs
-pe-bear myapp.exe  # Imports tab
+# 6. Compress
+strip myapp.exe && upx --best myapp.exe
+
+# 7. Re-check after packing
+depends myapp.exe
 ```
+
+> 💡 **Tip:** Run the pre-ship checklist before every release. Five minutes saves hours of debugging customer issues.
