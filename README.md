@@ -26,7 +26,8 @@
 | 16 | [vcpkg / Conan](#16-vcpkg--conan) | Package managers |
 | 17 | [Windows](#17-windows) | CRT, PDB, Defender, long paths |
 | 18 | [Binary tools](#18-binary-tools) | UPX, pe-bear, depends, ImHex |
-| 19 | [Cross-compile](#19-cross-compile) | Zig + QEMU (optional) |
+| 19 | [Tracing](#19-tracing) | Trace what a command actually does |
+| 20 | [Cross-compile](#20-cross-compile) | Zig + QEMU (optional) |
 
 ---
 
@@ -538,7 +539,159 @@ ls -lh myapp.exe                                      # size ok?
 
 ---
 
-## 19. Cross-compile
+## 19. Tracing
+
+> "What did that command actually do?" — files opened, registry touched, syscalls made, network connections, pipes, child processes.
+
+### What traces what
+
+| Tool | Traces | Installed? | Cross-platform? |
+|------|--------|-----------|-----------------|
+| **procmon** | Files, registry, network, process/thread (GUI + CLI) | ✅ sysinternals | Windows only |
+| **handle** | Open handles snapshot (files, pipes, mutexes, etc.) | ✅ sysinternals | Windows only |
+| **listdlls** | DLLs loaded by a process | ✅ sysinternals | Windows only |
+| **drstrace** | System calls (arguments + return values) | ❌ `scoop install drmemory` | Windows only |
+| **QEMU -strace** | Syscalls of a Linux binary | ✅ qemu | Linux binaries on any host |
+| **perfetto** | System-wide kernel + userspace tracing | ✅ perfetto | Linux + Android + Windows (limited) |
+| **ETW / logman** | Kernel events (file I/O, network, process) | ✅ built-in | Windows only |
+| **DTrace** | Kernel + userspace probes, live scripting | ❌ needs install | Windows 10+ (admin) |
+
+### procmon — the big one (GUI + CLI)
+
+```bash
+# GUI mode — filter by process name, see file/registry/network activity in real time
+procmon
+
+# CLI mode — capture to file, no GUI
+procmon /Quiet /Minimized /BackingFile trace.pml /AcceptEula
+
+# Stop capture
+procmon /Terminate
+
+# Open saved trace
+procmon /OpenLog trace.pml
+
+# Convert trace to CSV/XML for scripting
+procmon /OpenLog trace.pml /SaveAs trace.csv
+procmon /OpenLog trace.pml /SaveAs trace.xml
+```
+
+**Filter examples** (set in GUI, or pre-configure with `.pmf` config):
+
+```
+Process Name  is        myapp.exe      → only my app
+Operation     is        WriteFile      → only file writes
+Operation     contains  Delete         → file/registry deletes
+Path          contains  \build\        → only in build folder
+Result        is not    SUCCESS        → only failures
+```
+
+### handle — what's open right now?
+
+```bash
+# All handles for a process
+handle -p myapp.exe
+
+# Only file handles
+handle -p myapp.exe -a | rg "File"
+
+# Find which process has a file locked
+handle some_file.dll
+
+# Find all pipes
+handle -a | rg "Pipe"
+
+# Find all network sockets
+handle -a | rg "Socket|Tcp|Udp"
+```
+
+### listdlls — what DLLs are loaded?
+
+```bash
+listdlls myapp.exe
+listdlls -v myapp.exe           # verbose (version numbers)
+listdlls -d some.dll            # which processes loaded this DLL?
+```
+
+### drstrace — "strace for Windows"
+
+```bash
+# Install
+scoop install drmemory
+
+# Trace all syscalls of a command
+drstrace -- myapp.exe arg1 arg2
+# Output → drstrace.myapp.exe.PID.0000.log
+
+# Trace to specific directory
+drstrace -logdir ./traces -- myapp.exe
+
+# Don't follow child processes
+drstrace -no_follow_children -- myapp.exe
+
+# Example output line:
+# NtCreateFile(0x..., 0x80100000, "\Device\HarddiskVolume4\...\config.json", ...) => 0x0 (STATUS_SUCCESS)
+```
+
+### QEMU -strace — syscalls of a Linux binary
+
+```bash
+# Trace all syscalls
+qemu-x86_64 -strace ./myapp_linux
+
+# Trace specific syscalls (grep the output)
+qemu-x86_64 -strace ./myapp_linux 2>&1 | rg "openat|read|write|connect"
+```
+
+### ETW / logman — built-in kernel tracing
+
+```bash
+# Create a trace session (admin)
+logman create trace KernelTrace -p "Microsoft-Windows-Kernel-File" -o trace.etl
+
+# Start
+logman start KernelTrace
+
+# Run your app...
+
+# Stop
+logman stop KernelTrace
+
+# View with PerfView or Windows Performance Analyzer
+```
+
+### perfetto — system-wide tracing
+
+```bash
+# Already installed via scoop
+# Record a trace
+perfetto -c - --txt <<EOF
+buffers: { size_kb: 65536 }
+data_sources: { config { name: "linux.ftrace" ftrace_config { ftrace_events: "sched/sched_switch" } } }
+duration_ms: 10000
+EOF
+
+# Open https://ui.perfetto.dev — drag the trace file in
+```
+
+### When to use which
+
+```
+"Which files did my app touch?"           → procmon (filter Process Name)
+"Who's locking this DLL?"                 → handle
+"What DLLs are loaded at runtime?"        → listdlls
+"What syscalls did this command make?"    → drstrace (Windows) / qemu -strace (Linux)
+"Why is this slow? (system-level)"        → perfetto / ETW
+"Network connections made?"               → procmon (filter Operation = TCP Connect)
+"Registry keys modified?"                 → procmon (filter Operation contains RegSet)
+"Child processes spawned?"                → procmon (filter Operation = Process Create)
+```
+
+→ **Advanced**: [binary-tools.md](binary-tools.md) — Ghidra, radare2, x64dbg for deeper reverse engineering
+
+---
+
+## 20. Cross-compile
 
 ```bash
 # Zig — one command to Linux binary from Windows
@@ -573,6 +726,10 @@ CACHE:       ccache -s
 PROFILE:     tracy-profiler & ./myapp
 COMPILE_DB:  cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 LINK_DB:     ln -s build/dev/compile_commands.json .
+TRACE:       procmon /BackingFile trace.pml & myapp.exe & procmon /Terminate
+STRACE:      drstrace -- myapp.exe        (scoop install drmemory)
+SOCKETS:     handle -a | rg "Socket|Tcp"
+DLLS:        listdlls myapp.exe
 ```
 
 ---
@@ -592,8 +749,11 @@ WRITE CODE ──► watchexec rebuilds ──► cppcheck + clang-tidy
                                ▼
                           hyperfine bench
                                │
-                               ▼
-                             ship
+                     ┌─────────┴─────────┐
+                     ▼                   ▼
+              procmon/drstrace        ship
+              (trace syscalls,
+               files, network)
 ```
 
 ---
