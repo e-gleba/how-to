@@ -33,6 +33,7 @@
 | 23 | [Best practices & polyfills](#23-best-practices--polyfills) | cppreference macros, stdx, BackportCpp |
 | 24 | [Shortcuts](#24-shortcuts) | VS, VS Code, terminal, Windows |
 | 25 | [Where to watch](#25-where-to-watch) | Channels, podcasts, conference talks |
+| 26 | [Steam dev standards](#26-steam-dev-standards) | Golden rules, input API, gamepad emulation, Steamworks workflows |
 
 ---
 
@@ -754,7 +755,7 @@ ssh -L 48437:127.0.0.1:48437 deck@192.168.X.X
 
 | Tool | Purpose | Installed? | Docs |
 |------|---------|-----------|------|
-| **RGP (Render GPU Profiler)** | Per-frame GPU capture — shader stalls, draw call breakdown, memory bandwidth | ❌ `scoop install` from [GPUOpen](https://gpuopen.com/developer-toolSuite/radeon-developer-tool-suite/) | [RGP User Guide](https://gpuopen.com/learn/radeon_gpu_profiler/) |
+| **RGP (Render GPU Profiler)** | Per-frame GPU capture — shader stalls, draw call breakdown, memory bandwidth | ❌ [GPUOpen](https://gpuopen.com/developer-toolSuite/radeon-developer-tool-suite/) | [RGP User Guide](https://gpuopen.com/learn/radeon_gpu_profiler/) |
 | **RGA (Render Graphics Analyzer)** | Offline shader analysis — instruction count, registers, wavefront stats | ❌ same suite | [RGA Docs](https://gpuopen.com/learn/radeon_graphics_analyzer/) |
 | **RRA (Render Results Analyzer)** | Reactive rendering — frame-by-frame GPU replay, graphics pipe state | ❌ same suite | [RRA Docs](https://gpuopen.com/learn/radeon_reactive_rendering/) |
 | **RGD (Render Graphics Driver)** | Driver-level GPU profiling — low-level command buffer analysis | ❌ same suite | [RGD Docs](https://gpuopen.com/learn/radeon_graphics_driver/) |
@@ -841,7 +842,7 @@ Check compiler support before using a C++20/23/26 feature.
 
 | Library | Scope | License | Link |
 |---------|-------|---------|------|
-| **std::span polyfill** | `std::span` | MIT | [tcbrindle/cpp17_headers](https://github.com/tcbrindle/spconv) |
+| **std::span polyfill** | `std::span` | MIT | [tcbrindle/spconv](https://github.com/tcbrindle/spconv) |
 | **stdx** | Most C++20 types (bytes, string_view32, formatting, ranges) | Apache-2.0 | [std-lite/stdx](https://github.com/std-lite/stdx) |
 | **BackportCpp** | C++17/20/23 features backported to C++11 | MIT | [BackportCpp/BackportCpp](https://github.com/BackportCpp/BackportCpp) |
 | **Boost.Compat** | Boost-powered polyfills (algorithms, containers, string_view) | BSL-1.0 | [boostorg/compat](https://github.com/boostorg/compat) |
@@ -869,7 +870,7 @@ void process(std::span<int> data) {
 
 ### Jason Turner — C++ Weekly
 
-> [JasonT Turner C++ Weekly](https://cpp.libhunt.com/cpp-weekly) — 600+ weekly episodes on tooling, safety, performance, best practices.
+> [Jason Turner C++ Weekly](https://cpp.libhunt.com/cpp-weekly) — 600+ weekly episodes on tooling, safety, performance, best practices.
 
 | Category | Top episodes |
 |----------|-------------|
@@ -895,7 +896,7 @@ void process(std::span<int> data) {
 | `F10` | Step over |
 | `F11` | Step into |
 | `Shift+F11` | Step out |
-| `Ctrl+Shift+F10` | Current line execute (Ctrl+Shift+F5) |
+| `Ctrl+Shift+F10` | Current line execute |
 | `Ctrl+K, Ctrl+D` | Format document |
 | `Ctrl+K, Ctrl+F` | Format selection |
 | `Ctrl+M, Ctrl+M` | Toggle outlining |
@@ -914,11 +915,11 @@ void process(std::span<int> data) {
 |----------|--------|
 | `Ctrl+Shift+P` | Command palette |
 | `Ctrl+P` | Quick open |
-| `Ctrl+` ` ` | Open integrated terminal |
+| `Ctrl+`` ` | Open integrated terminal |
 | `Alt+Z` | Toggle word wrap |
 | `Ctrl+Shift+X` | Extensions |
-| `Ctrl+\`` | Toggle terminal |
-| `Ctrl+Shift+\\` | Diff two files |
+| `Ctrl+`` ` | Toggle terminal |
+| `Ctrl+Shift+\` | Diff two files |
 | `F12` | Go to definition |
 | `Alt+F12` | Peek definition |
 | `Ctrl+Shift+O` | Go to symbol |
@@ -928,7 +929,7 @@ void process(std::span<int> data) {
 | `Ctrl+Shift+L` | Select all occurrences |
 | `Ctrl+D` | Select next occurrence |
 | `Ctrl+/` | Toggle line comment |
-| `Ctrl+Shift+\\` | Find and replace |
+| `Ctrl+Shift+\` | Find and replace |
 
 > Microsoft docs: [VS Code keyboard shortcuts](https://code.visualstudio.com/shortcuts/keyboard-shortcuts-windows.pdf)
 
@@ -963,11 +964,11 @@ void process(std::span<int> data) {
 
 | Channel | What | Link |
 |---------|------|------|
-| **C++ Weekly (Jason Turner)** | Weekly episodes, tooling, C++20/23 features | [cpp.libhunt.com/c++weekly](https://cpp.libhunt.com/cpp-weekly) |
-| **The Cherno** | Game engine from scratch (C++), Yaretzi engine series | [youtube.com/thecherno](https://www.youtube.com/user/TheCherno) |
+| **C++ Weekly (Jason Turner)** | Weekly episodes, tooling, C++20/23 features | [cpp.libhunt.com/cpp-weekly](https://cpp.libhunt.com/cpp-weekly) |
+| **The Cherno** | Game engine from scratch (C++), Yaretzi engine series | [youtube.com/@TheCherno](https://www.youtube.com/@TheCherno) |
 | **CodeBeautiful** | C++ performance, interviews, best practices | [youtube.com/@CodeBeautiful](https://www.youtube.com/@CodeBeautiful) |
-| **Catch2** | Testing framework deep dives, unit testing | [youtube.com/@Catchorg](https://www.youtube.com/@CatchOrg) |
-| **C++ Insights** | Compiler output — see what C++ really compiles to | [youtube.com/@CPlusPlusInsights](https://www.youtube.com/@CppInsights) |
+| **Catch2** | Testing framework deep dives, unit testing | [youtube.com/@CatchOrg](https://www.youtube.com/@CatchOrg) |
+| **C++ Insights** | Compiler output — see what C++ really compiles to | [youtube.com/@CppInsights](https://www.youtube.com/@CppInsights) |
 | **CppCon talks** | Annual C++ conference — 300+ talks/year | [youtube.com/@CppCon](https://www.youtube.com/@CppCon) |
 | **GDC / Game Developers Conference** | GPU, engine architecture, AI, rendering | [youtube.com/@GameDevelopersConference](https://www.youtube.com/@GameDevelopersConference) |
 | **GPUOpen** | AMD GPU drivers, Radeon developer tools | [youtube.com/@GPUOpen](https://www.youtube.com/@GPUOpen) |
@@ -998,11 +999,197 @@ void process(std::span<int> data) {
 |------|---------|-----|
 | "Is Parallel Programming Hard, And If So, What Can You Do About It?" | Paul Khuong | Parallelism reality check |
 | "A Brief History of Everything" | Herb Sutter | C++ history that shaped the language |
-| "Custom Allocation in C++" | Matt kalk | Game engine memory management |
+| "Custom Allocation in C++" | Matt Kalk | Game engine memory management |
 | "Vulkan Programming" | Kenneth Russel | GPU fundamentals |
 | "What Every C++ Programmer Should Know About NaN" | Richard Smith | Floating-point correctness |
 
 → **Advanced**: [best-practices.md](best-practices.md) — cppreference, cppbestpractices.com, section 23 above
+
+---
+
+## 26. Steam dev standards
+
+> **Source**: [Steamworks Documentation](https://partner.steamgames.com/doc), [ISteamInput API](https://partner.steamgames.com/doc/api/ISteamInput), [Getting Started for Devs](https://partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs)
+
+### The Five Golden Rules of Input
+
+From [Zach Burke](https://partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs) — Valve's canonical input guidelines:
+
+1. **On-screen icons should match the input device** — show Xbox glyphs for Xbox, PS glyphs for PS. Steam Input emulates Xbox for all controllers, so use `SteamInput()->GetActionOriginFromXboxOrigin()` to detect the real device and swap glyphs at runtime.
+2. **Mouse cursor should match the input device** — visible OS cursor when using mouse/trackpad; hide it entirely for gamepad play.
+3. **All devices should work 100% of the time** — no broken bindings, no stuck buttons. Test edge cases: disconnect/reconnect during gameplay, Steam Remote Play, Steam Deck dock/undock.
+4. **Dpad, analog stick, and mouse can all be used to navigate menus** — menu traversal must work with every input method. Don't force a device that wasn't used to play.
+5. **A disconnected gamepad should pause the game** — if only one player is connected and the controller disconnects, pause. Multiplayer: mark the player as disconnected, don't freeze the game.
+
+> **Valve's added rule**: Gamepad + mouse input must work **simultaneously**. This is the #1 cause of Steam Input compatibility issues.
+
+### Steam Input API — Native mode (recommended)
+
+Don't just read XInput — talk to Steam Input directly for per-device glyphs, gyro, and trackpad input.
+
+```cpp
+// Initialize once at startup
+SteamInput()->Init();
+// ...
+// Update every frame (SteamAPI_RunCallbacks already calls RunFrame)
+SteamInput()->RunFrame();
+
+// Get the controller handle for XInput slot 0
+InputHandle_t controller = SteamInput()->GetControllerForGamepadIndex(0);
+if (controller != 0) {
+    // Controller is mapped through Steam Input
+    ESteamInputType type = SteamInput()->GetInputTypeForHandle(controller);
+    // k_ESteamInputType_PS4Controller, k_ESteamInputType_XBoxOneController, etc.
+
+    // Get the actual button origin (e.g. user remapped A to B)
+    EInputActionOrigin origin = SteamInput()->GetActionOriginFromXboxOrigin(
+        controller, k_EXboxOrigin_A
+    );
+
+    // Get the glyph path for that origin (future-proof — new controllers auto-work)
+    const char* glyphPath = SteamInput()->GetGlyphForActionOrigin(origin);
+    // e.g. "C:\Program Files (x86)\Steam\tenfoot\resource\images\library\controller\api\ps4_button_x.png"
+} else {
+    // Native XInput controller — use standard XBox glyph
+}
+
+// Read actions (native mode)
+SteamInput()->GetAnalogActionData(action, controller);
+
+// Camera input — always use absolute_mouse for precision aiming
+// (allows gyro + trackpad + joystick to all work simultaneously)
+```
+
+### In-Game Actions file (IGA)
+
+Tells Steam what actions exist so players can remap. Four steps:
+
+1. Create `controller_config/game_actions_<appid>.vdf` in your game folder
+2. Use the Steam Input Configurator in Big Picture mode to bind controls
+3. Read actions in-game via `ISteamInput` API
+4. Publish the config through the [Steamworks partner site](https://partner.steamgames.com)
+
+```vdf
+// game_actions_480.vdf — example structure
+"actions" {
+    "default" {
+        "title" "#Action_Default_Title"
+        "description" "#Action_Default_Desc"
+
+        // Button actions — mapped to digital inputs
+        "buttons" {
+            "Action_Jump" "#Action_Jump"
+            "Action_Shop" "#Action_Shop"
+        }
+
+        // Analog triggers — full analog (vehicle acceleration, etc.)
+        "analogtriggers" {
+            "Action_Accelerate" "#Action_Accelerate"
+        }
+
+        // Stick/pad/gyro — camera or movement
+        "stickpadgyro" {
+            // For camera/precision aiming — ALWAYS include absolute_mouse
+            "Action_Camera" {
+                "title" "#Action_Camera_Title"
+                "input_mode" "absolute_mouse"
+            }
+            "Action_Move" {
+                "title" "#Action_Move_Title"
+                "input_mode" "joystick_move"
+            }
+        }
+    }
+}
+```
+
+> **Critical**: For any first/third person game with camera controls, you MUST include an `absolute_mouse` type action. Steam Input converts joystick, gyro, and trackpad into `absolute_mouse` deltas. You cannot convert from `joystick_move` back to mouse. See [official docs](https://partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs).
+
+### Gamepad Emulation — Legacy mode (fallback)
+
+If you don't have Steam Input API, Steam still works through gamepad emulation. Configure on the partner site.
+
+```bash
+# Opt-in non-stem controllers (Xbox 360, Xbox One, PS4) to Steam Input
+# via Steamworks partner site → Application → Steam Input
+
+# Three templates available:
+# Gamepad                    → emulates Xbox + right trackpad as joystick
+# Gamepad With High Precision Camera/Aim  → ideal for FPS, needs simultaneous mouse+gamepad
+# Gamepad with Camera Controls → trackpad → joystick flicking, needs high sensitivity support
+```
+
+```cpp
+// Query controller glyph for gamepad emulation mode
+int nXinputSlot = 0;
+InputHandle_t controller = SteamInput()->GetControllerForGamepadIndex(nXinputSlot);
+if (controller != 0) {
+    EInputActionOrigin origin = SteamInput()->GetActionOriginFromXboxOrigin(controller, k_EXboxOrigin_A);
+    const char* glyphPath = SteamInput()->GetGlyphForActionOrigin(origin);
+    // Use this path to load a texture for your in-game button prompt
+}
+```
+
+### Text input
+
+Steam provides an on-screen keyboard for in-game text entry (naming avatars, chat, etc.):
+
+```cpp
+// This is in ISteamUtils, not ISteamInput
+SteamUtils()->ShowFloatingGamepadTextInput(
+    k_EFloatingGamepadTextInputModeModeSingleLine,
+    k_EFloatingGamepadTextInputAlignmentMIDDLE,
+    0, 0, -1
+);
+```
+
+### Steam Big Picture / Couch UI
+
+```cpp
+// Steam sets "SteamTenfoot" environment variable when running in Big Picture
+bool IsTenfoot() {
+    return getenv("SteamTenfoot") != nullptr;
+}
+
+// Default to fullscreen in tenfoot mode
+if (IsTenfoot()) {
+    SetFullscreen(true);
+}
+
+// Font size rule of thumb: minimum 24px at 1920x1080
+// Make UI readable from several feet away
+```
+
+### Steamworks resources
+
+| Resource | Link |
+|----------|------|
+| **Steamworks Documentation** (all of it) | [partner.steamgames.com/doc](https://partner.steamgames.com/doc) |
+| **ISteamInput API reference** | [partner.steamgames.com/doc/api/ISteamInput](https://partner.steamgames.com/doc/api/ISteamInput) |
+| **Getting Started for Devs** | [partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs](https://partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs) |
+| **Gamepad Emulation Best Practices** | [partner.steamgames.com/doc/features/steam_controller/steam_input_gamepad_emulation_bestpractices](https://partner.steamgames.com/doc/features/steam_controller/steam_input_gamepad_emulation_bestpractices) |
+| **Steamworks API Example (SpaceWar)** | [partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs#stepbystep](https://partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs) |
+| **IGAs File reference** | [partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs#igas](https://partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs) |
+| **Steam Deck Devkit setup** | [partner.steamgames.com/doc/steam_deck](https://partner.steamgames.com/doc/steam_deck) |
+| **Steam Deck Brand Guidelines** | [partner.steamgames.com/doc/steam_deck/brand_guidelines](https://partner.steamgames.com/doc/steam_deck/brand_guidelines) |
+| **Steam Input Presentation (Dev Days 2016)** | [youtube.com/watch?v=7I4SiAiKqqk](https://www.youtube.com/watch?v=7I4SiAiKqqk) |
+
+### Top-tier Steam game dev workflow
+
+```
+GAMEMAKER PROTOTYPE ──► Steam Input API (native mode) ──► IGA file
+                           │                                    │
+                           ▼                                    ▼
+                   Simultaneous mouse+gamepad         Publish config
+                   in-game (no device switching)      via partner site
+                           │                                    │
+                           ▼                                    ▼
+                  RGP/RGA GPU profiling          Steam Deck verified
+                  + Tracy CPU profiling          review → Steam store
+                           │
+                           ▼
+                  Big Picture / SteamTenfoot default fullscreen
+```
 
 ---
 
@@ -1033,6 +1220,10 @@ STEAM:       scp -P 22 -r build/ user@DECK_IP:~/...
 POLYFILL:    FetchContent stdx or BackportCpp for C++20 types on C++17
 SHORTCUT:    F5 debug | F10 step-over | F12 go-to-def | Ctrl+Shift+P VSCode cmd palette
 CPP_WEEKLY:  cpp.libhunt.com/cpp-weekly — 600+ episodes, tooling/safety/performance
+STEAM_INPUT: SteamInput()->Init() + SteamInput()->RunFrame() — read actions, query glyphs
+IGA_FILE:    controller_config/game_actions_<appid>.vdf — define actions for Steam remap
+STEAM_ICON:  SteamInput()->GetGlyphForActionOrigin(origin) — future-proof glyphs
+STEAM_TENFOOT: getenv("SteamTenfoot") — detect Big Picture mode, default fullscreen
 ```
 
 ---
@@ -1062,7 +1253,12 @@ WRITE CODE ──► watchexec rebuilds ──► cppcheck + clang-tidy
                           GPU profile (RGP)
                                │
                                ▼
-                          Steam Deck remote deploy
+                      Steam Input API (IGA file)
+                     glyphs + actions + gyro aim
+                               │
+                               ▼
+                    Steam Deck remote deploy
+                  SteamTenfoot fullscreen + verified
 ```
 
 ---
