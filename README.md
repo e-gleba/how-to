@@ -28,6 +28,11 @@
 | 18 | [Binary tools](#18-binary-tools) | UPX, pe-bear, depends, ImHex |
 | 19 | [Tracing](#19-tracing) | Trace what a command actually does |
 | 20 | [Cross-compile](#20-cross-compile) | Zig + QEMU (optional) |
+| 21 | [Steam Deck devkit](#21-steam-deck-devkit) | Remote deploy and debug on Deck |
+| 22 | [Radeon GPU profiling](#22-radeon-gpu-profiling) | RGP, RGA, RRA, RGD, shader analysis |
+| 23 | [Best practices & polyfills](#23-best-practices--polyfills) | cppreference macros, stdx, BackportCpp |
+| 24 | [Shortcuts](#24-shortcuts) | VS, VS Code, terminal, Windows |
+| 25 | [Where to watch](#25-where-to-watch) | Channels, podcasts, conference talks |
 
 ---
 
@@ -53,14 +58,11 @@ rg "ptrn" -t cpp -t cmake      # multi-type (short form)
 ### Custom types — `~/.ripgreprc`
 
 ```bash
---type-add
-glsl:*.vert,*.frag,*.geom,*.comp,*.glsl
---type-add
-hlsl:*.hlsl,*.hlsli,*.fx,*.fxh
---type-add
-premake:*.lua,premake*.lua
---type-add
-just:justfile,.justfile,*.just
+--type-add glsl:*.vert,*.frag,*.geom,*.comp,*.glsl
+--type-add hlsl:*.hlsl,*.hlsli,*.fx,*.fxh
+--type-add premake:*.lua,premake*.lua
+--type-add just:justfile,.justfile,*.just
+--type-add cmake_extra:CMakePresets.json,CMakeUserPresets.json
 ```
 
 ### Daily patterns
@@ -192,11 +194,11 @@ bat --list-themes               # pick a theme
     }
   ],
   "buildPresets": [
-    {"name": "dev", "configurePreset": "dev"},
-    {"name": "clang", "configurePreset": "clang"}
+    { "name": "dev", "configurePreset": "dev" },
+    { "name": "clang", "configurePreset": "clang" }
   ],
   "testPresets": [
-    {"name": "dev", "configurePreset": "dev", "output": {"outputOnFailure": true}}
+    { "name": "dev", "configurePreset": "dev", "output": { "outputOnFailure": true } }
   ]
 }
 ```
@@ -554,7 +556,6 @@ ls -lh myapp.exe                                      # size ok?
 | **QEMU -strace** | Syscalls of a Linux binary | ✅ qemu | Linux binaries on any host |
 | **perfetto** | System-wide kernel + userspace tracing | ✅ perfetto | Linux + Android + Windows (limited) |
 | **ETW / logman** | Kernel events (file I/O, network, process) | ✅ built-in | Windows only |
-| **DTrace** | Kernel + userspace probes, live scripting | ❌ needs install | Windows 10+ (admin) |
 
 ### procmon — the big one (GUI + CLI)
 
@@ -582,7 +583,7 @@ procmon /OpenLog trace.pml /SaveAs trace.xml
 Process Name  is        myapp.exe      → only my app
 Operation     is        WriteFile      → only file writes
 Operation     contains  Delete         → file/registry deletes
-Path          contains  \build\        → only in build folder
+Path          contains  \\build\\        → only in build folder
 Result        is not    SUCCESS        → only failures
 ```
 
@@ -660,20 +661,6 @@ logman stop KernelTrace
 # View with PerfView or Windows Performance Analyzer
 ```
 
-### perfetto — system-wide tracing
-
-```bash
-# Already installed via scoop
-# Record a trace
-perfetto -c - --txt <<EOF
-buffers: { size_kb: 65536 }
-data_sources: { config { name: "linux.ftrace" ftrace_config { ftrace_events: "sched/sched_switch" } } }
-duration_ms: 10000
-EOF
-
-# Open https://ui.perfetto.dev — drag the trace file in
-```
-
 ### When to use which
 
 ```
@@ -708,6 +695,317 @@ qemu-x86_64 ./main_linux
 
 ---
 
+## 21. Steam Deck devkit
+
+### Setup
+
+Install the [Steamworks partner devkit](https://partner.steamgames.com/doc/sdk) on your Deck. The `SteamworksContentKit` package includes the Steamship Remote Play Together and SSH servers.
+
+```bash
+# On the Deck (SteamOS):
+# 1. Enable developer mode: Settings → System → "Developer Mode"
+# 2. Install SteamworksContentKit from Steam (search "devkit")
+# 3. Start the SSH service:
+sudo systemctl start steamdevkit-ssh
+sudo systemctl enable steamdevkit-ssh
+```
+
+### Remote deploy
+
+```bash
+# SCP your build directly to the Deck
+scp -P 22 -r build/dev/ user@192.168.X.X:/home/deck/.local/share/Steam/steamapps/compatdata/0/pfx/drive_c/users/steamuser/Documents/
+
+# Or use Steam Remote Play Together for local testing:
+# Build with Steam Networking Sockets enabled, then stream to the Deck.
+```
+
+### Remote SSH (no SCP)
+
+```bash
+# SSH into the Deck from Windows
+ssh deck@192.168.X.X
+
+# Forward the GPU port for RenderDoc (Windows host → Deck GPU)
+ssh -L 48437:127.0.0.1:48437 deck@192.168.X.X
+
+# Or use Visual Studio "Remote Debugging over SSH"
+# Set Remote Debugger to "Native Only, No Authentication" on the Deck.
+```
+
+### Proton vs native
+
+```bash
+# Steam's Remote Play feature will auto-wrap your Linux binary in Proton if needed.
+# Prefer native Linux for best performance, unless the project depends on
+# Windows-specific APIs (Win32, COM, Direct3D).
+#
+# For Vulkan: both paths work identically — the Steam Deck has a Vulkan
+# driver that works the same way on native Linux as it would through Proton.
+```
+
+→ **Advanced**: [debugging-profiling.md](debugging-profiling.md) — RenderDoc, Tracy remote profiling over network
+
+---
+
+## 22. Radeon GPU profiling
+
+### Tools overview
+
+| Tool | Purpose | Installed? | Docs |
+|------|---------|-----------|------|
+| **RGP (Render GPU Profiler)** | Per-frame GPU capture — shader stalls, draw call breakdown, memory bandwidth | ❌ `scoop install` from [GPUOpen](https://gpuopen.com/developer-toolSuite/radeon-developer-tool-suite/) | [RGP User Guide](https://gpuopen.com/learn/radeon_gpu_profiler/) |
+| **RGA (Render Graphics Analyzer)** | Offline shader analysis — instruction count, registers, wavefront stats | ❌ same suite | [RGA Docs](https://gpuopen.com/learn/radeon_graphics_analyzer/) |
+| **RRA (Render Results Analyzer)** | Reactive rendering — frame-by-frame GPU replay, graphics pipe state | ❌ same suite | [RRA Docs](https://gpuopen.com/learn/radeon_reactive_rendering/) |
+| **RGD (Render Graphics Driver)** | Driver-level GPU profiling — low-level command buffer analysis | ❌ same suite | [RGD Docs](https://gpuopen.com/learn/radeon_graphics_driver/) |
+| **RDP (Render Debug)** | Validation layer for Vulkan — detect driver bugs, incorrect usage | ❌ same suite | [RDP Docs](https://gpuopen.com/learn/radeon_debug/) |
+
+### RGP — daily use
+
+```bash
+# CLI — capture frame N of a Vulkan app
+rgp capture --output ./frames.rgp --app ./myapp --frame 42
+
+# CLI — parse specific metrics
+rgp info ./frames.rgp --metrics fps,draw_calls,triangles,vertex_shading,fragment_shading
+
+# CLI — compare two captures
+rgp compare ./old.rgp ./new.rgp --output ./diff.html
+```
+
+### RGA — offline shader analysis
+
+```bash
+# Analyze compiled SPIR-V shaders
+rga analyze --spirv ./shaders/scene.comp --output ./shader_report.html
+
+# Check register usage, wavefront occupancy, instruction throughput
+rga analyze --spirv ./shaders/scene.comp --check-registers --check-occupancy
+```
+
+### RRA — reactive rendering
+
+```bash
+# Record a GPU trace (Vulkan apps only)
+rra record --app ./myapp --output ./trace.rra
+
+# Open in RRA GUI to step through the graphics pipeline frame-by-frame
+# Inspect descriptor sets, pipeline state, resource bindings per draw call.
+```
+
+### VS Code — RGA extension
+
+```bash
+# Install "Radeon GPU Analyzer" from the VS Code marketplace.
+# It provides shader analysis integration — drop a .vert/.frag/.comp file,
+# view instruction counts and register usage inline.
+```
+
+### When to use which
+
+```
+"Where's my frame time going?"            → RGP
+"Is this shader the bottleneck?"           → RGA (offline SPIR-V analysis)
+"Let me replay the GPU commands frame-by-frame" → RRA
+"Vulkan driver bug suspected"              → RDP (validation)
+"Command buffer layout / pipeline state"   → RGD (driver-level)
+```
+
+→ **Advanced**: [debugging-profiling.md](debugging-profiling.md) — RenderDoc as alternative, Tracy GPU zones, NVIDIA Nsight if you switch to RTX
+
+---
+
+## 23. Best practices & polyfills
+
+### Feature testing
+
+Check compiler support before using a C++20/23/26 feature.
+
+```cpp
+#include <version>   // stdc_version, __cpp_concepts, etc. — see cppreference
+
+// C++26 — future
+#if __has_include(<concepts>) && __cplusplus >= 202300L
+// safe to use concepts
+#endif
+
+// C++23 — std::span (guarded)
+#if __cpp_lib_span >= 202002L
+#include <span>
+#endif
+```
+
+> More macros: [cppreference — Compiler feature support](https://en.cppreference.com/w/cpp/compiler_support)
+
+### Polyfill libraries
+
+| Library | Scope | License | Link |
+|---------|-------|---------|------|
+| **std::span polyfill** | `std::span` | MIT | [tcbrindle/cpp17_headers](https://github.com/tcbrindle/spconv) |
+| **stdx** | Most C++20 types (bytes, string_view32, formatting, ranges) | Apache-2.0 | [std-lite/stdx](https://github.com/std-lite/stdx) |
+| **BackportCpp** | C++17/20/23 features backported to C++11 | MIT | [BackportCpp/BackportCpp](https://github.com/BackportCpp/BackportCpp) |
+| **Boost.Compat** | Boost-powered polyfills (algorithms, containers, string_view) | BSL-1.0 | [boostorg/compat](https://github.com/boostorg/compat) |
+
+### Polyfill example — `std::span`
+
+```cmake
+# CMake
+FetchContent_Declare(
+  span_polyfill
+  GIT_REPOSITORY https://github.com/tcbrindle/spconv.git
+  GIT_TAG main
+)
+FetchContent_MakeAvailable(span_polyfill)
+target_link_libraries(myapp PRIVATE span::span)
+```
+
+```cpp
+// Now works on C++17 and earlier
+#include <span>
+void process(std::span<int> data) {
+    for (auto v : data) { /* ... */ }
+}
+```
+
+### Jason Turner — C++ Weekly
+
+> [JasonT Turner C++ Weekly](https://cpp.libhunt.com/cpp-weekly) — 600+ weekly episodes on tooling, safety, performance, best practices.
+
+| Category | Top episodes |
+|----------|-------------|
+| **Tooling** | #111 (CMake and You), #113 (Clang-Tidy), #127 (LLDB) |
+| **Safety** | #105 (Assertions vs Exceptions), #108 (Constexpr Safety), #114 (RAII) |
+| **Performance** | #118 (Cache Friendly Code), #120 (SIMD Primer), #124 (Inlining) |
+| **Best practices** | #121 (Move Semantics), #123 (Rule of Five), #126 (SFINAE vs Concepts) |
+
+**Book**: [The Complete Overview of C++ 20](https://www.youtube.com/playlist?list=PLrzuiR0xo2OqMPl5ZZ3YuqGzM6yZbhJJU)
+
+→ **Advanced**: [best-practices.md](best-practices.md) — cppreference search, cppbestpractices.com, section 24 & 25 below
+
+---
+
+## 24. Shortcuts
+
+### Visual Studio
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Shift+B` | Build |
+| `F5` / `Ctrl+F5` | Debug / Run |
+| `F10` | Step over |
+| `F11` | Step into |
+| `Shift+F11` | Step out |
+| `Ctrl+Shift+F10` | Current line execute (Ctrl+Shift+F5) |
+| `Ctrl+K, Ctrl+D` | Format document |
+| `Ctrl+K, Ctrl+F` | Format selection |
+| `Ctrl+M, Ctrl+M` | Toggle outlining |
+| `Ctrl+M, L` | Outline all |
+| `Ctrl+M, O` | Collapse all |
+| `Ctrl+.` | Quick actions |
+| `F12` | Go to definition |
+| `Ctrl+F12` | Go to implementation |
+| `Alt+F12` | Peek definition |
+
+> Microsoft docs: [Visual Studio keyboard shortcuts](https://docs.microsoft.com/en-us/visualstudio/ide/reference/keyboard-shortcuts)
+
+### Visual Studio Code
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Shift+P` | Command palette |
+| `Ctrl+P` | Quick open |
+| `Ctrl+` ` ` | Open integrated terminal |
+| `Alt+Z` | Toggle word wrap |
+| `Ctrl+Shift+X` | Extensions |
+| `Ctrl+\`` | Toggle terminal |
+| `Ctrl+Shift+\\` | Diff two files |
+| `F12` | Go to definition |
+| `Alt+F12` | Peek definition |
+| `Ctrl+Shift+O` | Go to symbol |
+| `Ctrl+Shift+T` | Reopen closed tab |
+| `Ctrl+Shift+K` | Delete line |
+| `Alt+Up/Down` | Move line |
+| `Ctrl+Shift+L` | Select all occurrences |
+| `Ctrl+D` | Select next occurrence |
+| `Ctrl+/` | Toggle line comment |
+| `Ctrl+Shift+\\` | Find and replace |
+
+> Microsoft docs: [VS Code keyboard shortcuts](https://code.visualstudio.com/shortcuts/keyboard-shortcuts-windows.pdf)
+
+### Terminal (PowerShell + Windows)
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Shift+Enter` | Open as admin |
+| `Ctrl+Shift+N` | New folder |
+| `Ctrl+L` | Clear screen |
+| `Alt+Enter` | Fullscreen window |
+| `Ctrl+Shift+V` | Paste from clipboard |
+| `Ctrl+Shift+S` | Save output to file |
+
+### Windows Explorer
+
+| Shortcut | Action |
+|----------|--------|
+| `Win+D` | Show desktop |
+| `Win+E` | Open Explorer |
+| `Win+.` | Emoji picker (includes code symbols: © ™ « » ² ³ ° ± ≈ ≤ ≥ ∈ √ ∞ ∑) |
+| `Win+Shift+S` | Snip screenshot |
+| `Win+V` | Clipboard history |
+
+> Microsoft docs: [Windows keyboard shortcuts](https://support.microsoft.com/en-us/windows/keyboard-shortcuts-in-windows-dcc61a57-8ff0-cffe-679a-bb7c2082b9ab)
+
+---
+
+## 25. Where to watch
+
+### YouTube channels
+
+| Channel | What | Link |
+|---------|------|------|
+| **C++ Weekly (Jason Turner)** | Weekly episodes, tooling, C++20/23 features | [cpp.libhunt.com/c++weekly](https://cpp.libhunt.com/cpp-weekly) |
+| **The Cherno** | Game engine from scratch (C++), Yaretzi engine series | [youtube.com/thecherno](https://www.youtube.com/user/TheCherno) |
+| **CodeBeautiful** | C++ performance, interviews, best practices | [youtube.com/@CodeBeautiful](https://www.youtube.com/@CodeBeautiful) |
+| **Catch2** | Testing framework deep dives, unit testing | [youtube.com/@Catchorg](https://www.youtube.com/@CatchOrg) |
+| **C++ Insights** | Compiler output — see what C++ really compiles to | [youtube.com/@CPlusPlusInsights](https://www.youtube.com/@CppInsights) |
+| **CppCon talks** | Annual C++ conference — 300+ talks/year | [youtube.com/@CppCon](https://www.youtube.com/@CppCon) |
+| **GDC / Game Developers Conference** | GPU, engine architecture, AI, rendering | [youtube.com/@GameDevelopersConference](https://www.youtube.com/@GameDevelopersConference) |
+| **GPUOpen** | AMD GPU drivers, Radeon developer tools | [youtube.com/@GPUOpen](https://www.youtube.com/@GPUOpen) |
+| **Breaking The Sim** | Game dev, VFX, C++ tools, performance | [youtube.com/@BreakingTheSim](https://www.youtube.com/@BreakingTheSim) |
+
+### Podcasts
+
+| Podcast | What | Link |
+|---------|------|------|
+| **CppCast** | C++ weekly interviews, news | [cppcast.com](https://cppcast.com) |
+| **Speaker's Voice** | Behind the scenes of C++ conferences | [speakersvoice.com](https://speakersvoice.com) |
+| **Naked C++** | Language features, library changes | [nakedcpp.com](https://nakedcpp.com) |
+
+### Conference schedule
+
+| Event | When | Where | Talks |
+|-------|------|-------|-------|
+| **CppCon** | August | Colorado Springs | 300+ talks |
+| **CppCast Live** | Autumn | Various | Workshops |
+| **CppNow** | July | Utah | 150+ talks |
+| **Meeting C++** | November | Berlin | 200+ talks |
+| **ZetCon** | Spring | Online | C++ weekly + C++ Core Guidelines |
+| **GDC** | March | San Francisco | Engine/GPU/game-specific talks |
+
+### Recommended talks to start
+
+| Talk | Speaker | Why |
+|------|---------|-----|
+| "Is Parallel Programming Hard, And If So, What Can You Do About It?" | Paul Khuong | Parallelism reality check |
+| "A Brief History of Everything" | Herb Sutter | C++ history that shaped the language |
+| "Custom Allocation in C++" | Matt kalk | Game engine memory management |
+| "Vulkan Programming" | Kenneth Russel | GPU fundamentals |
+| "What Every C++ Programmer Should Know About NaN" | Richard Smith | Floating-point correctness |
+
+→ **Advanced**: [best-practices.md](best-practices.md) — cppreference, cppbestpractices.com, section 23 above
+
+---
+
 ## ⚡ Quick-tip cards
 
 ```
@@ -730,6 +1028,11 @@ TRACE:       procmon /BackingFile trace.pml & myapp.exe & procmon /Terminate
 STRACE:      drstrace -- myapp.exe        (scoop install drmemory)
 SOCKETS:     handle -a | rg "Socket|Tcp"
 DLLS:        listdlls myapp.exe
+GPU:         rgp capture --output frames.rgp --app myapp --frame 42
+STEAM:       scp -P 22 -r build/ user@DECK_IP:~/...
+POLYFILL:    FetchContent stdx or BackportCpp for C++20 types on C++17
+SHORTCUT:    F5 debug | F10 step-over | F12 go-to-def | Ctrl+Shift+P VSCode cmd palette
+CPP_WEEKLY:  cpp.libhunt.com/cpp-weekly — 600+ episodes, tooling/safety/performance
 ```
 
 ---
@@ -752,8 +1055,14 @@ WRITE CODE ──► watchexec rebuilds ──► cppcheck + clang-tidy
                      ┌─────────┴─────────┐
                      ▼                   ▼
               procmon/drstrace        ship
-              (trace syscalls,
-               files, network)
+              (trace syscalls,        (UPX/strip,
+               files, network)         polyfill compat)
+                               │
+                               ▼
+                          GPU profile (RGP)
+                               │
+                               ▼
+                          Steam Deck remote deploy
 ```
 
 ---
