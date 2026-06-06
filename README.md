@@ -11,23 +11,26 @@
 | # | Topic | What | Deep Dive |
 |---|-------|------|----------|
 | 0 | [Install](#0-install-tools) | One-command install per platform | [tools-install.md](tools-install.md) |
-| 1 | [CMake](#1-cmake) | CLI one-liners: configure, build, test, inspect | [cmake.md](cmake.md) |
+| 1 | [CMake](#1-cmake) | CLI one-liners: configure, build, test, pro tricks | [cmake.md](cmake.md) |
 | 2 | [Project Navigation](#2-project-navigation) | Study any repo fast: blame, history, diff, AI | [project-navigation.md](project-navigation.md) |
-| 3 | [Build Speed](#3-build-speed) | ccache, Ninja, PCH, unity | [build-acceleration.md](build-acceleration.md) |
-| 4 | [Search](#4-search) | ripgrep, fd, fzf, bat | [search-navigation.md](search-navigation.md) |
-| 5 | [Static Analysis](#5-static-analysis) | cppcheck, clang-tidy, ast-grep | [static-analysis.md](static-analysis.md) |
-| 6 | [Debug & Profile](#6-debug--profile) | GDB, LLDB, Tracy, sanitizers | [debugging-profiling.md](debugging-profiling.md) |
-| 7 | [Cross-Compile](#7-cross-compile) | Zig, Android, iOS | [cross-compilation.md](cross-compilation.md) |
-| 8 | [Packages](#8-packages) | vcpkg, Conan, FetchContent | [cmake-package-managers.md](cmake-package-managers.md) |
-| 9 | [Task Runner](#9-task-runner) | just — never type cmake again | [justfile.md](justfile.md) |
-| 10 | [Benchmarking](#10-benchmarking) | hyperfine, Google Benchmark | [benchmarking.md](benchmarking.md) |
-| 11 | [File Tracking](#11-file-tracking) | What did that command produce? | ↓ |
-| 12 | [Mobile Dev](#12-mobile-dev) | ADB, root, Xcode, devicectl, LLDB | [mobile.md](mobile.md) |
-| 13 | [Reverse Engineering](#13-reverse-engineering) | Ghidra, r2, x64dbg, WinDbg | [reverse-engineering.md](reverse-engineering.md) |
-| 14 | [Binary Tools](#14-binary-tools) | UPX, hex, PE, shipping | [binary-tools.md](binary-tools.md) |
-| 15 | [Controls & Input](#15-controls--input) | [Steam Golden Rules](https://partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs), gamepad | [controls.md](controls.md) |
-| 16 | [Windows](#16-windows-cpp) | MSVC, CRT, PDB, Defender | [windows-cpp.md](windows-cpp.md) |
-| 17 | [Resources](#17-resources) | Books, talks, channels | [resources.md](resources.md) |
+| 3 | [Git & lazygit](#3-git--lazygit) | Rebase, bisect, stash, cherry-pick, lazygit TUI | [git-tricks.md](git-tricks.md) |
+| 4 | [Shell Tricks](#4-shell-tricks) | `<()` process substitution, pipes, parallel, aliases | [shell-tricks.md](shell-tricks.md) |
+| 5 | [Build Speed](#5-build-speed) | ccache, Ninja, PCH, unity | [build-acceleration.md](build-acceleration.md) |
+| 6 | [Search](#6-search) | ripgrep, fd, fzf, bat | [search-navigation.md](search-navigation.md) |
+| 7 | [Static Analysis](#7-static-analysis) | cppcheck, clang-tidy, ast-grep | [static-analysis.md](static-analysis.md) |
+| 8 | [Debug & Profile](#8-debug--profile) | GDB/LLDB pro tricks, threads, reverse debug, minidumps | [debugging-profiling.md](debugging-profiling.md) |
+| 9 | [Network Debug](#9-network-debug) | tcpdump, Wireshark, DNS, TLS, why can't it connect | [network-debugging.md](network-debugging.md) |
+| 10 | [Cross-Compile](#10-cross-compile) | Zig, Android, iOS | [cross-compilation.md](cross-compilation.md) |
+| 11 | [Packages](#11-packages) | vcpkg, Conan, FetchContent | [cmake-package-managers.md](cmake-package-managers.md) |
+| 12 | [Task Runner](#12-task-runner) | just — never type cmake again | [justfile.md](justfile.md) |
+| 13 | [Benchmarking](#13-benchmarking) | hyperfine, Google Benchmark | [benchmarking.md](benchmarking.md) |
+| 14 | [File Tracking](#14-file-tracking) | What did that command produce? | ↓ |
+| 15 | [Mobile Dev](#15-mobile-dev) | ADB, root, Xcode, devicectl, LLDB | [mobile.md](mobile.md) |
+| 16 | [Reverse Engineering](#16-reverse-engineering) | Ghidra, r2, x64dbg, WinDbg | [reverse-engineering.md](reverse-engineering.md) |
+| 17 | [Binary Tools](#17-binary-tools) | UPX, hex, PE, shipping | [binary-tools.md](binary-tools.md) |
+| 18 | [Controls & Input](#18-controls--input) | [Steam Golden Rules](https://partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs), gamepad | [controls.md](controls.md) |
+| 19 | [Windows](#19-windows-cpp) | MSVC, CRT, PDB, Defender | [windows-cpp.md](windows-cpp.md) |
+| 20 | [Resources](#20-resources) | Books, talks, channels | [resources.md](resources.md) |
 
 ---
 
@@ -39,23 +42,23 @@
 # 🪟 Windows (scoop — no admin needed, clean install to ~/scoop/)
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
-scoop install git cmake ninja ccache ripgrep fd bat fzf just llvm zig
+scoop install git cmake ninja ccache ripgrep fd bat fzf just llvm zig lazygit
 
 # 🐧 Linux (Ubuntu/Debian)
 sudo apt update && sudo apt install -y \
   build-essential cmake ninja-build ccache gdb lldb clang clang-tidy \
-  ripgrep fd-find bat fzf strace
+  ripgrep fd-find bat fzf strace tcpdump
 
 # 🍎 macOS (get Xcode CLT first for clang + lldb + git)
 xcode-select --install
-brew install cmake ninja ccache ripgrep fd bat fzf just
+brew install cmake ninja ccache ripgrep fd bat fzf just lazygit
 ```
 
 ---
 
 ## 1. CMake
 
-> Full CLI cookbook (zero CMake language, only terminal commands): [cmake.md](cmake.md)
+> Full CLI cookbook with pro tricks: [cmake.md](cmake.md)
 > See also: [Modern CMake guide](https://cliutils.gitlab.io/modern-cmake/), [Professional CMake book](https://crascit.com/professional-cmake/)
 
 ```bash
@@ -83,6 +86,9 @@ cmake --build build --target help | sort
 cmake -B build -LAH | rg -i "feature|enable|option|with"
 # Generate dependency graph (needs graphviz)
 cmake -B build --graphviz=deps.dot && dot -Tpng deps.dot -o deps.png
+# Profile configure speed (CMake 3.28+)
+cmake -B build --profiling-output=prof.json --profiling-format=google-trace
+# → open prof.json at https://ui.perfetto.dev
 
 # Cross-compile
 cmake -B build/linux -DCMAKE_TOOLCHAIN_FILE=zig-toolchain.cmake
@@ -158,23 +164,110 @@ git bisect start HEAD v1.0
 git bisect run cmake --build build && ctest --test-dir build
 ```
 
-### Churn analysis
+---
+
+## 3. Git & lazygit
+
+> Full reference with lazygit keybindings: [git-tricks.md](git-tricks.md)
+> Tool: [lazygit](https://github.com/jesseduffield/lazygit) — TUI git client, makes rebase/bisect/cherry-pick visual
 
 ```bash
-# Most-changed files last 6 months
-git log --format=format: --name-only --since="6 months ago" | sort | uniq -c | sort -rn | head -20
+# Install: scoop install lazygit / brew install lazygit / sudo apt install lazygit
+lazygit                                      # launch TUI — everything is visual
 
-# Dead code candidates — defined but never called
-rg "void \w+\(" --type cpp -n | while read line; do
-  func=$(echo "$line" | rg -o "\w+\(" | head -1 | tr -d '(')
-  count=$(rg -c "$func" --type cpp | wc -l)
-  [ "$count" -le 1 ] && echo "DEAD? $line"
-done
+# Interactive rebase (lazygit: go to Commits [3], press 'e' to edit, 's' to squash)
+git rebase -i HEAD~5                         # CLI equivalent
+
+# Cherry-pick
+git cherry-pick abc1234                      # one commit
+git cherry-pick abc1234..def5678             # range
+
+# Stash tricks
+git stash push -m "WIP: feature X"          # named stash
+git stash push -- src/a.cpp src/b.cpp       # specific files only
+git stash push -u -m "with untracked"       # include untracked
+git stash list                              # see all stashes
+git stash apply stash@{2}                   # apply without dropping
+
+# Reflog — recover anything
+git reflog                                  # every HEAD movement ever
+git checkout -b recovered-branch abc1234    # recover deleted branch
+
+# Worktrees — work on multiple branches simultaneously
+git worktree add ../project-hotfix hotfix-branch
+cd ../project-hotfix                        # separate dir, same repo
+
+# Pretty log
+git log --oneline --graph --decorate --all -30
+```
+
+> 💡 **Pro tip**: lazygit makes interactive rebase 10× faster. Select commit → press `e` to edit, `s` to squash, `d` to drop. Resolve conflicts inline. No CLI editor needed.
+
+---
+
+## 4. Shell Tricks
+
+> Full reference with process substitution, pipes, aliases: [shell-tricks.md](shell-tricks.md)
+
+### Process substitution `<()` — the secret weapon
+
+> **Did you know?** `<()` runs a command and gives you a temp file descriptor. No temp files needed.
+
+```bash
+# Compare two command outputs
+diff <(cmake --build build --target help | sort) <(cmake --build build-rel --target help | sort)
+
+# Compare compile_commands between builds
+diff <(jq '.[].file' build/compile_commands.json | sort) <(jq '.[].file' build-rel/compile_commands.json | sort)
+
+# Compare git log of two branches
+diff <(git log main --oneline -20) <(git log feature --oneline -20)
+
+# Feed multiple sources to one command
+cat <(rg "#include" --type cpp --no-filename) <(rg "#include" --type c --no-filename) | sort -u
+
+# Pipe to multiple commands simultaneously
+cmake --build build 2>&1 | tee >(grep -i error > errors.log) >(grep -i warning > warnings.log)
+```
+
+### Pipe tricks
+
+```bash
+# xargs with parallel execution
+fd -e cpp | xargs -P 8 -I {} clang-format -i {}
+
+# Pipe to clipboard
+rg "pattern" --type cpp | xclip -selection clipboard    # Linux
+rg "pattern" --type cpp | pbcopy                         # macOS
+rg "pattern" --type cpp | clip                           # Windows
+
+# GNU parallel — process files 8 at a time
+fd -e cpp -e hpp | parallel -j8 clang-format -i {}
+
+# Brace expansion — create project structure fast
+mkdir -p project/{src/{core,render,audio},include,test,build}
+cp main.cpp{,.bak}                           # same as: cp main.cpp main.cpp.bak
+```
+
+### fzf-powered workflow
+
+```bash
+# Install fzf key bindings: ~/.fzf/install
+# Now you get:
+# Ctrl+R = fuzzy history search with preview
+# Ctrl+T = fuzzy file search inline
+# Alt+C  = fuzzy cd
+
+# Fuzzy open file with preview
+fd -e cpp | fzf --preview 'bat --style=numbers {}' | xargs vim
+
+# Fuzzy git branch checkout
+git branch | fzf | xargs git checkout
 ```
 
 ---
 
-## 3. Build Speed
+## 5. Build Speed
 
 > Full reference: [build-acceleration.md](build-acceleration.md)
 > Compiler cache comparison: [ccache](https://ccache.dev) vs [sccache](https://github.com/nickel-org/sccache)
@@ -200,7 +293,7 @@ cmake -B build -DCMAKE_UNITY_BUILD=ON
 
 ---
 
-## 4. Search
+## 6. Search
 
 > Full reference: [search-navigation.md](search-navigation.md)
 > Tools: [ripgrep](https://github.com/BurntSushi/ripgrep), [fd](https://github.com/sharkdp/fd), [fzf](https://github.com/junegunn/fzf), [bat](https://github.com/sharkdp/bat)
@@ -226,7 +319,7 @@ bat src/main.cpp --diff                     # show git changes in gutter
 
 ---
 
-## 5. Static Analysis
+## 7. Static Analysis
 
 > Full reference: [static-analysis.md](static-analysis.md)
 > Tools: [cppcheck](https://cppcheck.sourceforge.io), [clang-tidy](https://clang.llvm.org/extra/clang-tidy/), [ast-grep](https://ast-grep.github.io)
@@ -250,11 +343,11 @@ sg -p 'NULL' -r 'nullptr' --lang cpp -i     # replace all NULLs with nullptr
 
 ---
 
-## 6. Debug & Profile
+## 8. Debug & Profile
 
-> Full reference: [debugging-profiling.md](debugging-profiling.md)
+> Full pro reference with thread control & reverse debugging: [debugging-profiling.md](debugging-profiling.md)
 > Debuggers: [GDB](https://www.gnu.org/software/gdb/), [LLDB](https://lldb.llvm.org), [raddebugger](https://github.com/EpicGamesExt/raddebugger), [x64dbg](https://x64dbg.com)
-> Profiler: [Tracy](https://github.com/wolfpld/tracy), [Perfetto](https://perfetto.dev)
+> Profiler: [Tracy](https://github.com/wolfpld/tracy), [Perfetto](https://perfetto.dev), [Valgrind](https://valgrind.org)
 
 ### GDB
 ```bash
@@ -266,6 +359,60 @@ gdb -tui ./myapp
 ```bash
 lldb ./myapp
 # b main | run | next | step | continue | print var | po obj | bt | frame variable | expr myFunc(42)
+```
+
+### 🧵 Thread isolation — debug one thread, freeze all others
+
+> **Did you know?** You can freeze all threads except one. This is HUGE for multithreaded apps.
+
+```bash
+# GDB — freeze all threads except current
+info threads                                 # list threads
+thread 3                                     # switch to thread 3
+set scheduler-locking on                     # NOW only YOUR thread steps
+n                                            # next — only thread 3 moves
+s                                            # step — only thread 3 moves
+set scheduler-locking off                    # resume all
+
+# LLDB — same concept
+thread list                                  # list threads
+thread select 3                              # switch to thread 3
+settings set target.process.stop-others true # freeze others during step
+next                                         # only thread 3 moves
+settings set target.process.stop-others false
+```
+
+### ⏪ Reverse debugging — step BACKWARDS in time
+
+> **Did you know?** GDB can record execution and replay it backwards. Find "how did we get here?"
+
+```bash
+# GDB — record & reverse
+(gdb) target record-full                     # start recording EVERY instruction
+(gdb) continue                                # run forward normally
+# ... hit breakpoint or crash ...
+(gdb) reverse-step                            # step BACKWARDS
+(gdb) reverse-continue                        # run backwards to previous breakpoint
+(gdb) reverse-next                            # next line, backwards
+```
+
+### Windows crash minidumps + LLDB
+
+> **Did you know?** LLDB on Windows can open .dmp files directly. No WinDbg needed for basic analysis.
+
+```bash
+# Open minidump in LLDB
+lldb -c crash.dmp
+(lldb) bt                                    # backtrace at crash point
+(lldb) thread list                           # all threads at crash
+(lldb) frame variable                        # locals at crash
+(lldb) image list                            # loaded modules
+
+# Or WinDbg for deeper analysis:
+windbg -z crash.dmp
+!analyze -v                                  # auto-analysis
+kb                                           # call stack with params
+!heap -p -a <address>                        # analyze heap allocation
 ```
 
 ### Sanitizers ([ASan/UBSan/TSan docs](https://github.com/google/sanitizers/wiki))
@@ -287,10 +434,85 @@ tracy-profiler & ./build/dev/myapp          # GUI connects automatically
 - **[WinDbg](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/)** kernel debug, crash dumps → [reverse-engineering.md](reverse-engineering.md)
 - **[raddebugger](https://github.com/EpicGamesExt/raddebugger)** — fast native Windows debugger by Epic
 - **[x64dbg](https://x64dbg.com)** — runtime debugger for stripped binaries
+- **[Valgrind](https://valgrind.org)** — `valgrind --leak-check=full ./myapp` for memory leaks (Linux)
 
 ---
 
-## 7. Cross-Compile
+## 9. Network Debug
+
+> Full reference with tcpdump, Wireshark, DNS, TLS decryption: [network-debugging.md](network-debugging.md)
+> Tools: [tcpdump](https://www.tcpdump.org), [Wireshark](https://www.wireshark.org), [curl](https://curl.se), [netcat](https://netcat.sourceforge.net)
+
+### Why can't my app connect?
+
+```bash
+# Step 1: Can I reach the host?
+ping -c 4 host.com                           # by name
+ping -c 4 1.2.3.4                            # by IP (bypasses DNS)
+
+# Step 2: Is DNS working?
+dig host.com                                 # DNS lookup (Linux/macOS)
+nslookup host.com                            # all platforms
+
+# Step 3: Is the port open?
+nc -zv host.com 443 -w 3                     # TCP connect test
+# PowerShell:
+Test-NetConnection host.com -Port 443
+
+# Step 4: What's the route?
+traceroute host.com                          # Linux/macOS
+tracert host.com                             # Windows
+```
+
+### Packet capture
+
+```bash
+# tcpdump — capture everything on a port
+sudo tcpdump -i any port 8080 -w capture.pcap
+# Open capture.pcap in Wireshark
+
+# Filter by host + save
+sudo tcpdump -i any -w capture.pcap host api.example.com
+
+# Show only connection attempts (SYN) and refusals (RST)
+sudo tcpdump -i any 'tcp[tcpflags] & (tcp-syn|tcp-rst) != 0'
+
+# DNS queries only
+sudo tcpdump -i any port 53
+```
+
+### TLS decryption in Wireshark
+
+```bash
+# Set SSLKEYLOGFILE before running your app
+export SSLKEYLOGFILE=~/sslkeys.log
+curl https://api.example.com                 # or run your app
+# In Wireshark: Preferences → Protocols → TLS → set key log file
+# Now you see decrypted HTTP content!
+```
+
+### curl timing — where is it slow?
+
+```bash
+curl -o /dev/null -w "DNS: %{time_namelookup}s\nConnect: %{time_connect}s\nTLS: %{time_appconnect}s\nFirst byte: %{time_starttransfer}s\nTotal: %{time_total}s\n" https://api.example.com
+# If DNS is slow → check /etc/resolv.conf
+# If Connect is slow → firewall or routing issue
+# If TLS is slow → certificate chain too long
+# If First byte is slow → server-side processing
+```
+
+### Host spoofing (test against different server)
+
+```bash
+# /etc/hosts — redirect domain to localhost
+sudo sh -c 'echo "127.0.0.1 api.example.com" >> /etc/hosts'
+# Or without modifying hosts:
+curl --resolve api.example.com:443:127.0.0.1 https://api.example.com
+```
+
+---
+
+## 10. Cross-Compile
 
 > Full reference: [cross-compilation.md](cross-compilation.md)
 > Cross-compiler: [Zig](https://ziglang.org) — one tool, every target
@@ -312,7 +534,7 @@ cmake -B build/linux -DCMAKE_TOOLCHAIN_FILE=zig-toolchain.cmake -G Ninja
 
 ---
 
-## 8. Packages
+## 11. Packages
 
 > Full reference: [cmake-package-managers.md](cmake-package-managers.md)
 > Managers: [vcpkg](https://vcpkg.io), [Conan](https://conan.io), [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake)
@@ -329,7 +551,7 @@ cmake -B build -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake
 
 ---
 
-## 9. Task Runner
+## 12. Task Runner
 
 > Full reference: [justfile.md](justfile.md)
 > Tool: [just](https://github.com/casey/just) — like Make but without the pain
@@ -367,7 +589,7 @@ just todos
 
 ---
 
-## 10. Benchmarking
+## 13. Benchmarking
 
 > Full reference: [benchmarking.md](benchmarking.md)
 > Tool: [hyperfine](https://github.com/sharkdp/hyperfine) — statistical CLI benchmarking
@@ -388,7 +610,7 @@ hyperfine --prepare 'rm -rf build && cmake -B build -G Ninja' 'cmake --build bui
 
 ---
 
-## 11. File Tracking
+## 14. File Tracking
 
 > What files did that command/exe actually produce?
 
@@ -420,20 +642,6 @@ scoop install drmemory
 drstrace -- myapp.exe                        # → drstrace.myapp.exe.PID.log
 ```
 
-### QEMU cross-platform
-
-```bash
-qemu-x86_64 -strace ./myapp_linux 2>&1 | rg "openat|creat|write"
-```
-
-### DLL/handle tracking
-
-```bash
-handle -p myapp.exe -a | rg "File"          # what files are open
-listdlls myapp.exe                           # what DLLs loaded
-handle -a | rg "Socket|Tcp|Udp"             # network connections
-```
-
 ### Output tracking table
 
 | Command | Produces | Where |
@@ -450,7 +658,7 @@ handle -a | rg "Socket|Tcp|Udp"             # network connections
 
 ---
 
-## 12. Mobile Dev
+## 15. Mobile Dev
 
 > Full reference: [mobile.md](mobile.md)
 > Android: [ADB docs](https://developer.android.com/tools/adb), [Android NDK](https://developer.android.com/ndk)
@@ -495,7 +703,7 @@ lldb -n MyApp
 
 ---
 
-## 13. Reverse Engineering
+## 16. Reverse Engineering
 
 > Full reference: [reverse-engineering.md](reverse-engineering.md)
 > Tools: [Ghidra](https://ghidra-sre.org) (NSA decompiler), [radare2](https://rada.re) (RE framework), [x64dbg](https://x64dbg.com) (Windows debugger), [WinDbg](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/) (kernel debug), [IDA](https://hex-rays.com/ida-free/)
@@ -529,7 +737,7 @@ wa nop @ 0x401000                            # NOP out instruction
 
 ---
 
-## 14. Binary Tools
+## 17. Binary Tools
 
 > Full reference: [binary-tools.md](binary-tools.md)
 > Tools: [UPX](https://upx.github.io), [pe-bear](https://github.com/hasherezade/pe-bear), [ImHex](https://github.com/WerWolv/ImHex)
@@ -560,7 +768,7 @@ depends myapp.exe                            # missing DLLs?
 
 ---
 
-## 15. Controls & Input
+## 18. Controls & Input
 
 > Full reference: [controls.md](controls.md)
 > Source: [Valve Steam Input docs](https://partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs), [ISteamInput API](https://partner.steamgames.com/doc/api/ISteamInput), [Steamworks](https://partner.steamgames.com/doc)
@@ -589,7 +797,7 @@ const char* glyph = SteamInput()->GetGlyphForActionOrigin(origin);
 
 ---
 
-## 16. Windows C++
+## 19. Windows C++
 
 > Full reference: [windows-cpp.md](windows-cpp.md)
 
@@ -618,7 +826,7 @@ New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
 
 ---
 
-## 17. Resources
+## 20. Resources
 
 > Full reference with all links: [resources.md](resources.md)
 
@@ -659,12 +867,19 @@ New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
 ## ⚡ Quick Reference Card
 
 ```
-INSTALL:   scoop install ripgrep fd bat fzf just cmake ninja ccache llvm zig
+INSTALL:   scoop install ripgrep fd bat fzf just cmake ninja ccache llvm zig lazygit
 BUILD:     cmake -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON && cmake --build build
 TARGETS:   cmake --build build --target help | sort
 FEATURES:  cmake -B build -LAH | rg -i "feature|enable|option"
 GRAPH:     cmake -B build --graphviz=deps.dot && dot -Tpng deps.dot -o deps.png
+PROFILE:   cmake -B build --profiling-output=prof.json --profiling-format=google-trace
 TRACE:     cmake -B build --trace-expand 2>&1 | tee trace.log
+LAZYGIT:   lazygit                          (visual rebase, cherry-pick, bisect)
+REBASE:    git rebase -i HEAD~5             (or lazygit: [3] → 'e'/'s'/'d')
+BISECT:    git bisect start HEAD v1.0 && git bisect run cmake --build build && ctest
+WORKTREE:  git worktree add ../hotfix hotfix-branch
+PROC_SUB:  diff <(cmd1 | sort) <(cmd2 | sort)  (compare outputs, no temp files)
+PARALLEL:  fd -e cpp | xargs -P 8 -I {} clang-format -i {}
 WATCH:     watchexec -e cpp,hpp -- cmake --build build
 SEARCH:    rg "pattern" --type cpp -n -C 3
 FIND:      fd -e cpp -e hpp
@@ -673,12 +888,18 @@ BLAME:     git blame src/file.cpp | bat -l gitblame
 HISTORY:   git log -S "functionName" --oneline
 HOT FILES: git log --format=format: --name-only --since="6 months ago" | sort | uniq -c | sort -rn | head -15
 DIFF:      git diff main...HEAD --stat
-BISECT:    git bisect start HEAD v1.0 && git bisect run cmake --build build && ctest
 BENCH:     hyperfine --warmup 5 --min-runs 20 "./myapp"
 LINT:      cppcheck --enable=all --suppress=missingIncludeSystem src/
 FORMAT:    clang-format -i src/**/*.cpp src/**/*.hpp
 PROFILE:   tracy-profiler & ./myapp
 DEBUG:     gdb -tui ./myapp  |  lldb ./myapp
+THREADS:   set scheduler-locking on         (GDB: freeze all threads except current)
+REVERSE:   target record-full → reverse-step (GDB: step BACKWARDS in time)
+MINIDUMP:  lldb -c crash.dmp → bt           (LLDB: open Windows crash dump)
+NETWORK:   nc -zv host 443 -w 3             (is port open?)
+CAPTURE:   sudo tcpdump -i any port 8080 -w cap.pcap
+TLS DEBUG: export SSLKEYLOGFILE=~/sslkeys.log → Wireshark decrypts HTTPS
+CURL TIME: curl -o /dev/null -w "%{time_total}s\n" https://host
 CACHE:     ccache -s
 COMPILEDB: cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON && ln -sf build/compile_commands.json .
 STRACE:    strace -f -e trace=openat ./myapp  |  drstrace -- myapp.exe
@@ -702,10 +923,12 @@ AI STUDY:  aider --read-only src/engine/     (ask questions about code)
 ```
 CLONE REPO ──► scc + tree + bat README ──► git shortlog + log (orient)
                                               │
-WRITE CODE ──► watchexec auto-rebuild ──► cppcheck + clang-tidy (analyze)
+WRITE CODE ──► lazygit commit ─────────► cppcheck + clang-tidy (analyze)
                     │                            │
                     ▼                            ▼
               gdb / lldb                  sanitizers (ASAN/UBSAN)
+              set scheduler-locking on    thread isolation
+              target record-full          reverse debugging
                     │                            │
                     └──────────┬─────────────────┘
                                ▼
@@ -715,15 +938,17 @@ WRITE CODE ──► watchexec auto-rebuild ──► cppcheck + clang-tidy (ana
                                │
                 ┌──────────────┼──────────────┐
                 ▼              ▼              ▼
-          cross-compile   strace/procmon    ship
+          cross-compile   strace/tcpdump    ship
           Zig/QEMU        (trace files,     checksec + strip + UPX
-          ADB deploy      syscalls,         depends/ldd check
-          xcrun deploy    network)          strings secret scan
+          ADB deploy      packets,          depends/ldd check
+          xcrun deploy    network, TLS)     strings secret scan
                                │            Steam Input (IGA)
                                ▼            Big Picture mode
                           git bisect (find the regression)
                                ▼
                           Ghidra/r2/x64dbg (when you need to go deeper)
+                               ▼
+                          lldb -c crash.dmp (analyze minidumps)
 ```
 
 ---
