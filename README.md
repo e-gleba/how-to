@@ -9,7 +9,7 @@
 ## 📋 Index
 
 | # | Topic | What | Deep Dive |
-|---|-------|------|----------|
+|---|-------|------|-----------|
 | 0 | [Install](#0-install-tools) | One-command install per platform | [tools-install.md](tools-install.md) |
 | 1 | [CMake](#1-cmake) | CLI one-liners: configure, build, test, pro tricks | [cmake.md](cmake.md) |
 | 2 | [Project Navigation](#2-project-navigation) | Study any repo fast: blame, history, diff, AI | [project-navigation.md](project-navigation.md) |
@@ -31,6 +31,7 @@
 | 18 | [Controls & Input](#18-controls--input) | [Steam Golden Rules](https://partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs), gamepad | [controls.md](controls.md) |
 | 19 | [Windows](#19-windows-cpp) | MSVC, CRT, PDB, Defender | [windows-cpp.md](windows-cpp.md) |
 | 20 | [Resources](#20-resources) | Books, talks, channels | [resources.md](resources.md) |
+| 21 | [USB-C Gamedev](#21-usb-c-gamedev) | SDL3 gamepad, DP Alt Mode, PD charging, cables, docks | [usb-c-gamedev.md](usb-c-gamedev.md) |
 
 ---
 
@@ -864,6 +865,61 @@ New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
 
 ---
 
+## 21. USB-C Gamedev
+
+> Full reference: [usb-c-gamedev.md](usb-c-gamedev.md)
+> Covers: SDL3 gamepad hotplug, DisplayPort Alt Mode, Power Delivery, USB analysis, docks, cables
+
+### Install SDL3 (one-liner per platform)
+
+```bash
+scoop install sdl3                           # 🪟 Windows
+brew install sdl3                            # 🍎 macOS
+sudo apt install libsdl3-dev                 # 🐧 Ubuntu/Debian
+epm install libSDL3-devel                    # 🐧 ALT Linux
+```
+
+### CMake + SDL3
+
+```cmake
+find_package(SDL3 REQUIRED)
+target_link_libraries(mygame PRIVATE SDL3::SDL3)
+```
+
+### Hotplug-safe gamepad (SDL3)
+
+```cpp
+SDL_Gamepad* gp = nullptr;
+// In event loop:
+case SDL_EVENT_GAMEPAD_ADDED:   gp = SDL_OpenGamepad(event.gdevice.which); break;
+case SDL_EVENT_GAMEPAD_REMOVED: SDL_CloseGamepad(gp); gp = nullptr; break;
+// Per-frame:
+SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_SOUTH);  // A/Cross
+SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX);      // left stick X
+SDL_RumbleGamepad(gp, low, high, ms);                 // vibration
+SDL_GetPowerInfo(&secs, &pct);                        // battery %
+```
+
+### USB device listing
+
+```bash
+lsusb -tv                                    # 🐧 Linux — full USB tree
+system_profiler SPUSBDataType                # 🍎 macOS
+Get-PnpDevice -Class USB                     # 🪟 Windows PowerShell
+```
+
+### Handheld USB-C specs
+
+| Device | DP Output | PD Charging | Cable Needed |
+|--------|-----------|-------------|--------------|
+| Steam Deck | DP 1.4 Alt Mode | 45W | USB 3.2+ |
+| ROG Ally | DP Alt Mode | 100W (need 100W PSU) | USB 3.2+ |
+| Switch / Switch 2 | HDMI via dock | 18-20W / 100W | Official dock |
+
+> **Tip**: USB-C cable that costs $3 is USB 2.0 charge-only. No video, no fast data. Need USB 3.2+ ($15-25) for DP Alt Mode.
+
+---
+
 ## ⚡ Quick Reference Card
 
 ```
@@ -914,6 +970,14 @@ STEAM:     SteamInput()->Init() + GetGlyphForActionOrigin() → future-proof gly
 CROSS:     zig c++ -target x86_64-linux-gnu -O2 main.cpp -o main_linux
 LOC:       scc src/
 AI STUDY:  aider --read-only src/engine/     (ask questions about code)
+SDL3:      scoop install sdl3 | apt install libsdl3-dev | epm install libSDL3-devel
+GAMEPAD:   SDL_EVENT_GAMEPAD_ADDED → SDL_OpenGamepad() → SDL_GetGamepadButton/Axis
+RUMBLE:    SDL_RumbleGamepad(gp, low, high, ms)
+BATTERY:   SDL_GetPowerInfo(&secs, &pct)    → SDL_POWERSTATE_ON_BATTERY / CHARGING
+USB LIST:  lsusb -tv | system_profiler SPUSBDataType | Get-PnpDevice -Class USB
+USB VID:   0x045e=Xbox 0x054c=Sony 0x057e=Nintendo 0x28de=Valve
+DP ALT:    USB-C → dock → HDMI/DP (need USB 3.2+ cable, not $3 charge cable)
+PD:        Deck=45W | Ally=100W | Switch=18W | EPR=240W
 ```
 
 ---
@@ -949,8 +1013,10 @@ WRITE CODE ──► lazygit commit ─────────► cppcheck + cl
                           Ghidra/r2/x64dbg (when you need to go deeper)
                                ▼
                           lldb -c crash.dmp (analyze minidumps)
+                               ▼
+                          USB-C: lsusb + SDL3 gamepad test + dock DP output
 ```
 
 ---
 
-Companion deep-dives linked inline throughout. Install via [scoop](https://scoop.sh), [apt](https://ubuntu.com), or [brew](https://brew.sh).
+Companion deep-dives linked inline throughout. Install via [scoop](https://scoop.sh), [apt](https://ubuntu.com), [epm](https://www.altlinux.org/Epm), or [brew](https://brew.sh).
