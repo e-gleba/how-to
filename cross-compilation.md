@@ -1,6 +1,6 @@
 # Cross-Compilation from Windows
 
-## Zig — one-command cross-compiler
+## Zig — One-Command Cross-Compiler
 
 ```bash
 zig c++ -target x86_64-linux-gnu -O2 main.cpp -o app_linux
@@ -29,10 +29,12 @@ cmake -B build/linux -DCMAKE_TOOLCHAIN_FILE=zig-toolchain.cmake -G Ninja
 cmake --build build/linux
 ```
 
-## QEMU — test without VM
+## QEMU — Test Without VM
 
 ```bash
-scoop install qemu
+scoop install qemu     # Windows
+sudo apt install qemu-user  # Linux
+brew install qemu      # macOS
 
 qemu-x86_64 ./app_linux
 qemu-x86_64 -strace ./app_linux     # trace syscalls
@@ -42,13 +44,49 @@ qemu-aarch64 ./app_arm
 ## Android NDK
 
 ```bash
-# Via android-studio + android-clt (already installed)
+# Via android-studio or android-clt
+# Install:
+scoop install android-clt                    # Windows (scoop preferred)
+brew install --cask android-commandlinetools # macOS
+sudo apt install android-sdk                 # Linux
+
+# Configure
 cmake -B build/android \
-  -DCMAKE_TOOLCHAIN_FILE="$env:LOCALAPPDATA/Android/Sdk/ndk/27.0.12077973/build/cmake/android.toolchain.cmake" \
+  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
   -DANDROID_ABI=arm64-v8a \
   -DANDROID_PLATFORM=android-24
 
 cmake --build build/android
+
+# Deploy + run
+adb push build/android/myapp /data/local/tmp/
+adb shell chmod +x /data/local/tmp/myapp
+adb shell /data/local/tmp/myapp
+```
+
+## iOS
+
+```bash
+# macOS only — requires Xcode
+cmake -B build/ios -GXcode \
+  -DCMAKE_SYSTEM_NAME=iOS \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0
+
+cmake --build build/ios
+
+# Or xcodebuild directly
+xcodebuild -project MyApp.xcodeproj -scheme MyApp \
+  -sdk iphoneos -destination 'generic/platform=iOS' build
+
+# Deploy to device
+xcrun devicectl device install app --device <device-id> build/ios/MyApp.app
+```
+
+## macOS Universal Binary
+
+```bash
+cmake -B build -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 ```
 
 ## MSYS2 (POSIX on Windows)
@@ -62,7 +100,7 @@ pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-nin
 cmake -B build -G Ninja && cmake --build build
 ```
 
-## Feature detection (over OS detection)
+## Feature Detection (over OS Detection)
 
 ```cmake
 # BAD
@@ -76,7 +114,7 @@ if(HAS_EPOLL)
 endif()
 ```
 
-## CI matrix
+## CI Matrix
 
 ```yaml
 # .github/workflows/build.yml
@@ -89,4 +127,8 @@ steps:
   - run: ctest --preset ${{ matrix.preset }}
 ```
 
-> 💡 **Tip:** Zig + QEMU = full Linux dev loop on Windows. No VM, no WSL, no Docker.
+> 💡 Zig + QEMU = full Linux dev loop on Windows. No VM, no WSL, no Docker.
+
+→ **CMake one-liners**: [cmake.md](cmake.md) — configure/build/test shortcuts
+→ **Mobile deploy**: [mobile.md](mobile.md) — ADB, devicectl, xcrun
+→ **Install**: [tools-install.md](tools-install.md) — install zig, qemu, NDK

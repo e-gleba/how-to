@@ -3,12 +3,16 @@
 ## hyperfine
 
 ```bash
-scoop install hyperfine
+# Install:
+scoop install hyperfine          # Windows
+sudo apt install hyperfine       # Linux
+brew install hyperfine           # macOS
 
-hyperfine './myapp'                                        # basic
-hyperfine --warmup 5 --min-runs 20 './myapp'                # proper
-hyperfine './old' './new'                                   # compare
+hyperfine './myapp'                                       # basic
+hyperfine --warmup 5 --min-runs 20 './myapp'               # proper
+hyperfine './old' './new'                                  # compare
 hyperfine --prepare 'cmake --build build' './myapp --bench' # build first
+hyperfine -P size 1024 65536 "./myapp --buf {size}"         # parameter sweep
 hyperfine --export-markdown results.md './myapp'            # export
 ```
 
@@ -55,7 +59,7 @@ FetchContent_MakeAvailable(benchmark)
 target_link_libraries(mybench PRIVATE benchmark::benchmark)
 ```
 
-## Quick micro-benchmark
+## Quick Micro-Benchmark
 
 ```cpp
 #include <chrono>
@@ -69,7 +73,7 @@ auto measure(F&& f, int n = 1'000'000) {
 // Usage: auto ns = measure([]{ do_work(); });
 ```
 
-## Compilation benchmarking
+## Compilation Benchmarking
 
 ```bash
 # Full rebuild time
@@ -88,4 +92,4 @@ hyperfine --prepare 'cmake --build build && touch src/main.cpp' 'cmake --build b
 5. **Prevent optimization** — use `benchmark::DoNotOptimize()`
 6. **Measure the real thing** — not synthetic loops
 
-> 💡 **Tip:** hyperfine is for CLI apps, Google Benchmark for micro-benchmarks, Tracy for whole-system profiling.
+> 💡 hyperfine is for CLI apps, Google Benchmark for micro-benchmarks, Tracy for whole-system profiling.

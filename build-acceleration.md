@@ -5,19 +5,20 @@
 ## ccache
 
 ```bash
-scoop install ccache
+# Install:
+scoop install ccache            # Windows
+sudo apt install ccache         # Linux
+brew install ccache             # macOS
 
-ccache -s              # stats
-ccache --max-size 10G   # increase cache
-ccache -C              # clear cache
-ccache -z              # zero stats (before benchmark)
+ccache -s                       # stats
+ccache --max-size 10G           # increase cache
+ccache -C                       # clear cache
+ccache -z                       # zero stats (before benchmark)
 ```
 
-**CMake:** add to presets cacheVariables:
-
-```json
-"CMAKE_C_COMPILER_LAUNCHER": "ccache",
-"CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+**CMake:** add to configure:
+```bash
+cmake -B build -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 ```
 
 **Verify:** build twice. `ccache -s` should show cache hits on second build.
@@ -27,14 +28,19 @@ ccache -z              # zero stats (before benchmark)
 Like ccache but with cloud backends (S3, GCS). Good for CI.
 
 ```bash
-scoop install sccache
+scoop install sccache           # Windows
+cargo install sccache           # Linux
+brew install sccache            # macOS
 # Same CMake variables as ccache
 ```
 
 ## Ninja
 
 ```bash
-scoop install ninja
+scoop install ninja             # Windows
+sudo apt install ninja-build    # Linux
+brew install ninja              # macOS
+
 cmake -B build -G Ninja
 ```
 
@@ -45,7 +51,7 @@ Faster than Make because:
 
 > 💡 Never use `-j` with Ninja — it auto-detects core count.
 
-## Precompiled headers
+## Precompiled Headers
 
 ```cmake
 target_precompile_headers(myapp PRIVATE
@@ -58,7 +64,7 @@ target_precompile_headers(myapp PRIVATE
 
 Especially effective with MSVC.
 
-## Unity builds (CI only)
+## Unity Builds (CI only)
 
 ```cmake
 set(CMAKE_UNITY_BUILD ON)
@@ -69,7 +75,7 @@ Full rebuild of ~500 .cpp: 3:20 → 0:45.
 
 ⚠️ Don't use for incremental dev — hides ODR violations, macros leak across files.
 
-## Expected speedups
+## Expected Speedups
 
 | Technique | Cold build | Hot rebuild (1 file changed) |
 |-----------|-----------|------------------------------|
@@ -80,3 +86,6 @@ Full rebuild of ~500 .cpp: 3:20 → 0:45.
 | + Unity | ~25% | n/a (full rebuild) |
 
 > 💡 **Daily dev:** Ninja + ccache + PCH. **CI:** + Unity.
+
+→ **CMake one-liners**: [cmake.md](cmake.md) — configure with ccache in one line
+→ **Install**: [tools-install.md](tools-install.md) — install ccache, ninja, sccache
