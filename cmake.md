@@ -1,63 +1,63 @@
-# CMake One-Liners Cookbook
+# CMake CLI One-Liners
 
-> Daily-use CMake commands. Copy, paste, adapt. Cross-platform.
+> Terminal commands only. No CMakeLists.txt. Copy-paste-run.
+> Install: [scoop install cmake ninja](tools-install.md) (Windows) / `sudo apt install cmake ninja-build` (Linux) / `brew install cmake ninja` (macOS)
 
-## Configure
+## Configure — the daily driver
 
 ```bash
-# Basic configure — Debug build with Ninja
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+# The one you'll type every day — debug + ninja + ccache + compile_commands
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
-# Release with symbols (best for profiling)
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+# Release with symbols (profiling + crash dumps)
+cmake -B build-rel -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
-# Export compile_commands.json (needed by clangd, clang-tidy, IDE)
-cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-
-# Enable compiler cache (ccache/sccache) — 5-10× faster rebuilds
-cmake -B build -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-# Pick compiler explicitly
+# Pick your compiler
 cmake -B build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
 cmake -B build -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14
+cmake -B build -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl   # Windows clang
 
-# Set C++ standard
+# C++ standard
 cmake -B build -DCMAKE_CXX_STANDARD=20 -DCMAKE_CXX_STANDARD_REQUIRED=ON
+cmake -B build -DCMAKE_CXX_STANDARD=23
 
-# Enable sanitizers (clang/gcc)
-cmake -B build -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-               -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+# Sanitizers (clang/gcc)
+cmake -B build -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
 
-# Static CRT on MSVC (no vcruntime.dll dependency)
-cmake -B build -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>"
+# Thread sanitizer (separate build — conflicts with ASAN)
+cmake -B build-tsan -DCMAKE_CXX_FLAGS="-fsanitize=thread" -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
 
-# PDB in release (Windows crash dumps)
-cmake -B build -DCMAKE_CXX_FLAGS_RELEASE="/Zi" \
-               -DCMAKE_EXE_LINKER_FLAGS_RELEASE="/DEBUG /OPT:REF /OPT:ICF"
-
-# Cross-compile with toolchain file
-cmake -B build/linux -DCMAKE_TOOLCHAIN_FILE=zig-toolchain.cmake
+# Verbose — see exact compiler invocations
+cmake -B build -DCMAKE_VERBOSE_MAKEFILE=ON
 
 # Install prefix
+cmake -B build -DCMAKE_INSTALL_PREFIX=/usr/local
 cmake -B build -DCMAKE_INSTALL_PREFIX=./install
+```
 
-# Android NDK
-cmake -B build/android \
-  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
-  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24
+## Cross-platform configure
 
-# iOS
-cmake -B build/ios -GXcode \
-  -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64
+```bash
+# Android NDK (install: scoop install android-clt / brew install --cask android-commandlinetools)
+cmake -B build/android -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24
+
+# iOS (macOS only, needs Xcode: xcode-select --install)
+cmake -B build/ios -GXcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64
 
 # macOS universal binary
 cmake -B build -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 
-# Unity build (fast full rebuild, CI only)
-cmake -B build -DCMAKE_UNITY_BUILD=ON -DCMAKE_UNITY_BUILD_BATCH_SIZE=16
+# macOS minimum version
+cmake -B build -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
 
-# Verbose build output (see exact compiler commands)
-cmake -B build -DCMAKE_VERBOSE_MAKEFILE=ON
+# Zig cross-compile to Linux from Windows/macOS (install: scoop install zig / brew install zig)
+cmake -B build/linux -DCMAKE_TOOLCHAIN_FILE=zig-toolchain.cmake -G Ninja
+
+# Windows static CRT (no vcruntime.dll needed)
+cmake -B build -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>"
+
+# Windows PDB in release (crash dumps)
+cmake -B build -DCMAKE_CXX_FLAGS_RELEASE="/Zi" -DCMAKE_EXE_LINKER_FLAGS_RELEASE="/DEBUG /OPT:REF /OPT:ICF"
 ```
 
 ## Build
@@ -68,22 +68,28 @@ cmake --build build
 
 # Build specific target
 cmake --build build --target myapp
+cmake --build build --target mylib
 
-# Parallel jobs (Ninja auto-detects, Make needs -j)
-cmake --build build -j$(nproc)          # Linux
-cmake --build build -j$(sysctl -n hw.ncpu)  # macOS
-cmake --build build -j%NUMBER_OF_PROCESSORS%  # Windows CMD
-cmake --build build                      # Ninja: no -j needed
-
-# Clean rebuild of one target
+# Clean rebuild one target
 cmake --build build --target myapp --clean-first
 
-# Build with verbose output
+# Parallel jobs
+cmake --build build -j8                   # explicit
+cmake --build build -j$(nproc)            # Linux: all cores
+cmake --build build -j$(sysctl -n hw.ncpu)  # macOS: all cores
+cmake --build build                        # Ninja auto-detects
+
+# Verbose build (see compiler flags per file)
 cmake --build build --verbose
+
+# Build with specific config (multi-config generators like MSVC/Xcode)
+cmake --build build --config Release
+cmake --build build --config RelWithDebInfo
 
 # Install
 cmake --install build
 cmake --install build --prefix ./install
+cmake --install build --strip
 cmake --install build --component Runtime
 ```
 
@@ -91,145 +97,171 @@ cmake --install build --component Runtime
 
 ```bash
 # Run all tests
-cd build && ctest --output-on-failure
+ctest --test-dir build --output-on-failure
 
-# Run tests matching pattern
-ctest -R "unit" --output-on-failure
+# Filter by name (regex)
+ctest --test-dir build -R "unit" --output-on-failure
+ctest --test-dir build -R "math|physics" --output-on-failure
 
-# Run tests in parallel
-ctest -j$(nproc) --output-on-failure
+# Exclude tests
+ctest --test-dir build -E "slow|integration" --output-on-failure
 
-# List available tests
+# Parallel test execution
+ctest --test-dir build -j$(nproc) --output-on-failure
+
+# List all tests (don't run)
 ctest --test-dir build -N
 
-# Run specific test by number
+# Run specific test by index
 ctest --test-dir build -I 3,3
+
+# Run with timeout (kill stuck tests)
+ctest --test-dir build --timeout 30 --output-on-failure
+
+# Verbose output (see test stdout)
+ctest --test-dir build --verbose --output-on-failure
+
+# Repeat N times (find flaky tests)
+ctest --test-dir build --repeat-until-fail 10
 ```
 
-## Inspect
+## Study a project — understand what's inside
 
 ```bash
-# List all cache variables
-cmake -B build -LAH
+# List ALL targets in the project (executables, libraries, custom targets)
+cmake --build build --target help         # Ninja
+cmake --build build --target help | rg -i "myapp|test|bench"  # filter
 
-# Print system info
+# List all cache variables (every -D option the project supports)
+cmake -B build -LAH                        # LAH = List All Advanced with Help
+cmake -B build -LAH | rg -i "feature|enable|option|with"  # find toggleable features
+
+# System info (compiler, platform, paths)
 cmake --system-info
 
-# Generate dependency graph
-cmake -B build --graphviz=deps.dot && dot -Tpng deps.dot -o deps.png
+# Generate dependency graph (needs graphviz: scoop install graphviz / apt install graphviz)
+cmake -B build --graphviz=deps.dot
+dot -Tpng deps.dot -o deps.png            # → visual dependency map
+dot -Tsvg deps.dot -o deps.svg            # SVG for zooming
 
-# List all targets
-cmake --build build --target help
+# Trace what CMake does during configure (finds bottlenecks, bad FindXXX)
+cmake -B build --trace-expand 2>&1 | tee cmake-trace.log
+cmake -B build --trace-expand --trace-source=CMakeLists.txt 2>&1 | tee trace.log
 
-# Print all properties of a target (from CMakeLists.txt)
-# get_target_property(ALL_PROPS myapp PROPERTY)
+# Log-level for configure (see what find_package finds)
+cmake -B build --log-level=VERBOSE
+cmake -B build --log-level=DEBUG           # maximum output
+
+# Print one specific variable
+cmake -B build -LAH | rg CMAKE_INSTALL_PREFIX
+cmake -B build -LAH | rg CMAKE_CXX_FLAGS
+
+# What find_package found
+cmake -B build --log-level=VERBOSE 2>&1 | rg "Found "
 ```
 
-## compile_commands.json
-
-> **Why?** Every tool (clangd, clang-tidy, IDE completion) needs this file.
-
-```bash
-# Generate (add to configure step)
-cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-
-# Symlink to project root
-ln -sf build/compile_commands.json .              # Linux/macOS
-New-Item -ItemType SymbolicLink -Path compile_commands.json -Target build\compile_commands.json  # PowerShell
-mklink compile_commands.json build\compile_commands.json  # CMD (no admin)
-```
-
-## Presets (the good way)
-
-> Presets save typing. Define once, use forever.
+## Presets — CLI usage
 
 ```bash
 # List available presets
 cmake --list-presets
+cmake --list-presets build                 # build presets
+cmake --list-presets test                  # test presets
 
-# Configure + build + test with preset
+# Configure with preset
 cmake --preset dev
+cmake --preset release
+cmake --preset clang
+
+# Build with preset
 cmake --build --preset dev
+
+# Test with preset
 ctest --preset dev --output-on-failure
+
+# Workflow preset (configure + build + test in one command, CMake 3.25+)
+cmake --workflow --preset dev
 ```
 
-Minimal `CMakePresets.json`:
-```json
-{
-  "version": 6,
-  "configurePresets": [{
-    "name": "dev",
-    "generator": "Ninja",
-    "binaryDir": "${sourceDir}/build/${presetName}",
-    "cacheVariables": {
-      "CMAKE_BUILD_TYPE": "Debug",
-      "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-      "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-      "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
-    }
-  }],
-  "buildPresets": [{"name": "dev", "configurePreset": "dev"}],
-  "testPresets": [{"name": "dev", "configurePreset": "dev", "output": {"outputOnFailure": true}}]
-}
+> Presets defined in `CMakePresets.json` — see [Modern CMake presets guide](https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html)
+> User overrides in `CMakeUserPresets.json` (gitignored)
+
+## compile_commands.json
+
+```bash
+# Generate (add to any configure command)
+cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+# Symlink to project root (clangd, clang-tidy, IDE need it here)
+ln -sf build/compile_commands.json .                       # Linux/macOS
+New-Item -ItemType SymbolicLink -Path compile_commands.json -Target build\compile_commands.json  # PowerShell
+mklink compile_commands.json build\compile_commands.json   # Windows CMD
 ```
 
-User overrides → `CMakeUserPresets.json` (gitignored):
-```json
-{
-  "version": 6,
-  "configurePresets": [{
-    "name": "my-debug",
-    "inherits": "dev",
-    "cacheVariables": { "MY_FEATURE": "ON" }
-  }]
-}
+> Every tool that reads C++ needs this: [clangd](https://clangd.llvm.org), [clang-tidy](https://clang.llvm.org/extra/clang-tidy/), [compdb](https://github.com/Sarcasm/compdb)
+
+## Package one-liners
+
+```bash
+# vcpkg (install: scoop install vcpkg / brew install vcpkg)
+cmake -B build -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+vcpkg install fmt:x64-windows spdlog:x64-windows          # classic mode
+vcpkg list                                                 # what's installed
+vcpkg search sqlite                                        # find packages
+
+# Conan 2 (install: pip install conan)
+conan install . --output-folder=build --build=missing
+cmake -B build -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake
+conan profile detect                                       # auto-detect compiler
+conan list "*"                                             # local cache
 ```
 
-## Useful CMake Variables Quick Reference
+> Compare: [vcpkg vs Conan vs FetchContent vs CPM.cmake](cmake-package-managers.md)
 
-| Variable | Value | Effect |
-|----------|-------|--------|
-| `CMAKE_BUILD_TYPE` | `Debug` / `Release` / `RelWithDebInfo` / `MinSizeRel` | Build configuration |
-| `CMAKE_CXX_STANDARD` | `17` / `20` / `23` | C++ standard version |
-| `CMAKE_EXPORT_COMPILE_COMMANDS` | `ON` | Generate compile_commands.json |
-| `CMAKE_C_COMPILER_LAUNCHER` | `ccache` | Compiler cache for faster rebuilds |
-| `CMAKE_VERBOSE_MAKEFILE` | `ON` | Show full compiler commands |
-| `CMAKE_UNITY_BUILD` | `ON` | Combine .cpp files (fast full rebuild) |
-| `CMAKE_INSTALL_PREFIX` | `/usr/local` or `./install` | Install destination |
-| `CMAKE_MSVC_RUNTIME_LIBRARY` | `MultiThreaded` / `MultiThreadedDLL` | Static/dynamic CRT |
-| `CMAKE_OSX_ARCHITECTURES` | `arm64;x86_64` | macOS universal binary |
-| `CMAKE_OSX_DEPLOYMENT_TARGET` | `14.0` | Minimum macOS version |
-| `CMAKE_ANDROID_ARCH_ABI` | `arm64-v8a` | Android target arch |
+## Unity builds
 
-## Common Patterns
+```bash
+# Fast full rebuild (CI only — merges .cpp files)
+cmake -B build -DCMAKE_UNITY_BUILD=ON -DCMAKE_UNITY_BUILD_BATCH_SIZE=16
+cmake --build build
 
-```cmake
-# FetchContent — grab a library from GitHub
-include(FetchContent)
-FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt.git GIT_TAG 11.0.2)
-FetchContent_MakeAvailable(fmt)
-target_link_libraries(myapp PRIVATE fmt::fmt)
+# Per-target (from CLI, override CMakeLists.txt)
+cmake -B build -DCMAKE_UNITY_BUILD=ON -DCMAKE_UNITY_BUILD_BATCH_SIZE=8
+```
 
-# Precompiled headers — speed up compilation
-target_precompile_headers(myapp PRIVATE <vector> <string> <memory> "pch.hpp")
+> ⚠️ Unity hides ODR violations. Dev builds: use [ccache](build-acceleration.md) instead.
 
-# Feature detection (better than OS detection)
-include(CheckIncludeFile)
-check_include_file("sys/epoll.h" HAS_EPOLL)
-if(HAS_EPOLL)
-    target_compile_definitions(myapp PRIVATE USE_EPOLL)
-endif()
+## Clean & reset
 
-# Set warnings
-target_compile_options(myapp PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -Werror>
-)
+```bash
+# Nuclear option
+rm -rf build/
+
+# Clean one preset
+rm -rf build/dev/
+
+# Reset cache (keep generated files)
+rm build/CMakeCache.txt
+cmake -B build                             # reconfigure from scratch
+
+# Remove compile_commands symlink
+rm compile_commands.json
+```
+
+## CMake version & info
+
+```bash
+cmake --version                            # e.g. 3.31.0
+cmake --help                               # all options
+cmake --help-variable CMAKE_BUILD_TYPE     # docs for one variable
+cmake --help-property COMPILE_DEFINITIONS  # docs for one property
+cmake --help-module FindPkgConfig          # docs for one module
+cmake --help-command find_package          # docs for one command
 ```
 
 ---
 
-→ **Install**: [tools-install.md](tools-install.md) — how to install cmake + ninja + ccache
-→ **Build speed**: [build-acceleration.md](build-acceleration.md) — ccache, PCH, unity builds
-→ **Cross-compile**: [cross-compilation.md](cross-compilation.md) — Zig, Android, iOS toolchains
-→ **Packages**: [cmake-package-managers.md](cmake-package-managers.md) — vcpkg, Conan, FetchContent
+**Related**: [Project navigation](project-navigation.md) — git blame, history, diffs, AI tools for studying repos
+**Related**: [Build acceleration](build-acceleration.md) — ccache, PCH, speedup table
+**Related**: [Cross-compilation](cross-compilation.md) — Zig, Android NDK, iOS toolchains
+**Related**: [Package managers](cmake-package-managers.md) — vcpkg, Conan, FetchContent deep dive
