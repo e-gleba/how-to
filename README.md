@@ -18,7 +18,7 @@
 | 5 | [Build Speed](#5-build-speed) | ccache, Ninja, PCH, unity | [build-acceleration.md](build-acceleration.md) |
 | 6 | [Search](#6-search) | ripgrep, fd, fzf, bat | [search-navigation.md](search-navigation.md) |
 | 7 | [Static Analysis](#7-static-analysis) | cppcheck, clang-tidy, ast-grep | [static-analysis.md](static-analysis.md) |
-| 8 | [Debug & Profile](#8-debug--profile) | GDB/LLDB pro tricks, threads, reverse debug, minidumps | [debugging-profiling.md](debugging-profiling.md) |
+| 8 | [Debug & Profile](#8-debug--profile) | GDB/LLDB, threads, reverse debug, crash dumps (all platforms) | [debugging-profiling.md](debugging-profiling.md) |
 | 9 | [Network Debug](#9-network-debug) | tcpdump, Wireshark, DNS, TLS, why can't it connect | [network-debugging.md](network-debugging.md) |
 | 10 | [Cross-Compile](#10-cross-compile) | Zig, Android, iOS | [cross-compilation.md](cross-compilation.md) |
 | 11 | [Packages](#11-packages) | vcpkg, Conan, FetchContent | [cmake-package-managers.md](cmake-package-managers.md) |
@@ -29,7 +29,7 @@
 | 16 | [Reverse Engineering](#16-reverse-engineering) | Ghidra, r2, x64dbg, WinDbg | [reverse-engineering.md](reverse-engineering.md) |
 | 17 | [Binary Tools](#17-binary-tools) | UPX, hex, PE, shipping | [binary-tools.md](binary-tools.md) |
 | 18 | [Controls & Input](#18-controls--input) | [Steam Golden Rules](https://partner.steamgames.com/doc/features/steam_controller/getting_started_for_devs), gamepad | [controls.md](controls.md) |
-| 19 | [Windows](#19-windows-cpp) | MSVC, CRT, PDB, Defender | [windows-cpp.md](windows-cpp.md) |
+| 19 | [Windows](#19-windows-cpp) | Dev Mode, WSL, Terminal, PowerToys, MSVC, CRT, PDB | [windows-cpp.md](windows-cpp.md) |
 | 20 | [Resources](#20-resources) | Books, talks, channels | [resources.md](resources.md) |
 | 21 | [USB-C Gamedev](#21-usb-c-gamedev) | SDL3 gamepad, DP Alt Mode, PD charging, cables, docks | [usb-c-gamedev.md](usb-c-gamedev.md) |
 
@@ -346,7 +346,7 @@ sg -p 'NULL' -r 'nullptr' --lang cpp -i     # replace all NULLs with nullptr
 
 ## 8. Debug & Profile
 
-> Full pro reference with thread control & reverse debugging: [debugging-profiling.md](debugging-profiling.md)
+> Full pro reference with thread control, reverse debugging & cross-platform crash dumps: [debugging-profiling.md](debugging-profiling.md)
 > Debuggers: [GDB](https://www.gnu.org/software/gdb/), [LLDB](https://lldb.llvm.org), [raddebugger](https://github.com/EpicGamesExt/raddebugger), [x64dbg](https://x64dbg.com)
 > Profiler: [Tracy](https://github.com/wolfpld/tracy), [Perfetto](https://perfetto.dev), [Valgrind](https://valgrind.org)
 
@@ -397,24 +397,49 @@ settings set target.process.stop-others false
 (gdb) reverse-next                            # next line, backwards
 ```
 
-### Windows crash minidumps + LLDB
+### 💀 Crash dump debugging (all platforms)
 
-> **Did you know?** LLDB on Windows can open .dmp files directly. No WinDbg needed for basic analysis.
+> Full cross-platform reference: [debugging-profiling.md](debugging-profiling.md) — Crash Dump section
 
 ```bash
-# Open minidump in LLDB
+# Windows — LLDB opens .dmp directly
 lldb -c crash.dmp
-(lldb) bt                                    # backtrace at crash point
-(lldb) thread list                           # all threads at crash
-(lldb) frame variable                        # locals at crash
-(lldb) image list                            # loaded modules
+(lldb) bt                                    # backtrace at crash
+(lldb) thread list                           # all threads
+(lldb) frame variable                        # locals
 
-# Or WinDbg for deeper analysis:
+# Windows — WinDbg for deeper analysis
 windbg -z crash.dmp
 !analyze -v                                  # auto-analysis
 kb                                           # call stack with params
-!heap -p -a <address>                        # analyze heap allocation
+
+# Linux — GDB core dump
+gdb ./myapp core.12345
+(gdb) bt full                                # backtrace + locals
+(gdb) thread apply all bt full               # all threads
+
+# Linux — coredumpctl (systemd)
+coredumpctl list                             # captured cores
+coredumpctl gdb <pid>                        # auto-finds binary + core
+
+# macOS — crash report
+lldb -c MyApp-2024-01-15.ips
+(lldb) bt
+
+# Android — tombstone symbolication
+adb logcat | ndk-stack -sym obj/local/arm64-v8a
+
+# iOS — symbolicate crash log
+xcrun symbolicatecrash crash.ips MyApp.app.dSYM > symbolicated.crash
 ```
+
+| Platform | Dump | Symbols | Tool |
+|----------|------|---------|------|
+| Windows | `.dmp` | `.pdb` | LLDB, WinDbg, cdb |
+| Linux | `core` | unstripped binary / `.debug` | GDB, LLDB, coredumpctl |
+| macOS | `.crash` / `.ips` | `.dSYM/` | LLDB, atos |
+| iOS | `.ips` | `.dSYM/` | symbolicatecrash, LLDB |
+| Android | `tombstone` | unstripped `.so` | ndk-stack, addr2line, LLDB |
 
 ### Sanitizers ([ASan/UBSan/TSan docs](https://github.com/google/sanitizers/wiki))
 ```bash
@@ -800,7 +825,7 @@ const char* glyph = SteamInput()->GetGlyphForActionOrigin(origin);
 
 ## 19. Windows C++
 
-> Full reference: [windows-cpp.md](windows-cpp.md)
+> Full reference: [windows-cpp.md](windows-cpp.md) — Dev Mode, WSL, Terminal, PowerToys, compilers, CRT, PDB
 
 ```bash
 # Static CRT (no vcruntime.dll dependency)
@@ -817,7 +842,26 @@ Add-MpPreference -ExclusionPath "C:\Users\YOU\projects"
 # Long paths (admin — fixes deep build tree issues)
 New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
     -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+
+# Enable Developer Mode (admin — unlocks symlinks, WSL, sideloading)
+reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
+
+# Install WSL
+wsl --install
+
+# Install Windows Terminal (scoop — NOT from Store)
+scoop install windows-terminal
+
+# Install PowerToys
+scoop install powertoys
 ```
+
+| Shortcut | Action |
+|----------|--------|
+| **Win + X, I** | Open Terminal fast |
+| **Win + X, A** | Terminal as Admin |
+| **Alt + Space** | PowerToys Run (launcher) |
+| **Win + Shift + C** | Color Picker |
 
 | Compiler | Best for |
 |----------|----------|
@@ -924,6 +968,10 @@ Get-PnpDevice -Class USB                     # 🪟 Windows PowerShell
 
 ```
 INSTALL:   scoop install ripgrep fd bat fzf just cmake ninja ccache llvm zig lazygit
+WIN SETUP: reg add DevMode + wsl --install + scoop install windows-terminal powertoys
+TERMINAL:  Win+X,I (fast open) | Win+X,A (admin) | scoop install windows-terminal (not Store)
+POWERTOYS: Alt+Space (Run) | Win+Shift+C (Color) | Win+Ctrl+T (Always on Top)
+COREUTILS: scoop install uutils-coreutils wget curl jq tree sed grep openssh
 BUILD:     cmake -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON && cmake --build build
 TARGETS:   cmake --build build --target help | sort
 FEATURES:  cmake -B build -LAH | rg -i "feature|enable|option"
@@ -951,7 +999,14 @@ PROFILE:   tracy-profiler & ./myapp
 DEBUG:     gdb -tui ./myapp  |  lldb ./myapp
 THREADS:   set scheduler-locking on         (GDB: freeze all threads except current)
 REVERSE:   target record-full → reverse-step (GDB: step BACKWARDS in time)
-MINIDUMP:  lldb -c crash.dmp → bt           (LLDB: open Windows crash dump)
+WIN DUMP:  lldb -c crash.dmp → bt           (LLDB: open Windows crash dump)
+WIN DUMP:  windbg -z crash.dmp → !analyze -v (WinDbg: deep Windows analysis)
+LNX DUMP:  gdb ./myapp core → bt full       (GDB: Linux core dump)
+LNX DUMP:  coredumpctl gdb <pid>            (systemd: auto-finds binary + core)
+MAC DUMP:  lldb -c MyApp.ips → bt          (LLDB: macOS crash report)
+IOS DUMP:  xcrun symbolicatecrash crash.ips App.dSYM  (iOS: symbolicate)
+AND DUMP:  ndk-stack -sym obj/local/arm64-v8a < tombstone  (Android: symbolicate)
+SYMBOLS:   Always archive PDB/dSYM/.debug per release — crash analysis depends on them!
 NETWORK:   nc -zv host 443 -w 3             (is port open?)
 CAPTURE:   sudo tcpdump -i any port 8080 -w cap.pcap
 TLS DEBUG: export SSLKEYLOGFILE=~/sslkeys.log → Wireshark decrypts HTTPS
@@ -978,6 +1033,7 @@ USB LIST:  lsusb -tv | system_profiler SPUSBDataType | Get-PnpDevice -Class USB
 USB VID:   0x045e=Xbox 0x054c=Sony 0x057e=Nintendo 0x28de=Valve
 DP ALT:    USB-C → dock → HDMI/DP (need USB 3.2+ cable, not $3 charge cable)
 PD:        Deck=45W | Ally=100W | Switch=18W | EPR=240W
+WSL:       wsl --install → sudo apt install build-essential cmake gdb lldb clang
 ```
 
 ---
@@ -1012,7 +1068,12 @@ WRITE CODE ──► lazygit commit ─────────► cppcheck + cl
                                ▼
                           Ghidra/r2/x64dbg (when you need to go deeper)
                                ▼
-                          lldb -c crash.dmp (analyze minidumps)
+                          💀 crash dump analysis (all platforms)
+                          Win: lldb -c crash.dmp / windbg !analyze -v
+                          Lnx: gdb ./app core / coredumpctl gdb
+                          Mac: lldb -c App.ips / symbolicatecrash
+                          And: ndk-stack -sym obj/local/arm64-v8a
+                          iOS: xcrun symbolicatecrash + dSYM
                                ▼
                           USB-C: lsusb + SDL3 gamepad test + dock DP output
 ```
