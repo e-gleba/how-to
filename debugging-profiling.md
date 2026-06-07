@@ -175,17 +175,25 @@ watchpoint set expression -- *(int*)0x7fff1234
 > The art of post-mortem debugging: your app crashed, you have a dump file, now find out why.
 > Every platform has its own dump format, tools, and symbol requirements. This section covers them all.
 
-### What files do you need?
+### ⚠️ The Golden Rule — You Need THREE Things
+
+> **Without all three, you get useless hex addresses.** Every crash dump debugging session requires:
+> 1. **The dump file** — what the crash produced
+> 2. **The exact binary** — same build, same commit, same compiler flags
+> 3. **The debug symbols** — PDB, dSYM, .debug, or unstripped binary
+>
+> Miss any one → no function names, no line numbers, no locals. Just `0x7FF61234abcd`.
 
 | Platform | Dump file | Symbols file | Binary | Tool |
 |----------|-----------|-------------|--------|------|
-| **Windows** | `.dmp` (minidump) | `.pdb` | `.exe` / `.dll` | LLDB, WinDbg, cdb |
+| **Windows** | `.dmp` (minidump) | `.pdb` (**MANDATORY**) | `.exe` / `.dll` | LLDB, WinDbg, cdb |
 | **Linux** | `core` / `core.<pid>` | `.debug` or unstripped binary | ELF binary | GDB, LLDB |
-| **macOS** | `.crash` / `.ips` | `.dSYM/` bundle | Mach-O binary | LLDB, Console.app |
-| **iOS** | `.ips` / `.crash` | `.dSYM/` bundle | Mach-O binary | LLDB, Xcode Organizer |
-| **Android** | `tombstone_<NN>` | unstripped `.so` | `.so` / `.apk` | `ndk-stack`, `addr2line`, LLDB |
+| **macOS** | `.crash` / `.ips` | `.dSYM/` bundle (**MANDATORY**) | Mach-O binary | LLDB, Console.app |
+| **iOS** | `.ips` / `.crash` | `.dSYM/` bundle (**MANDATORY**) | Mach-O binary | LLDB, Xcode Organizer |
+| **Android** | `tombstone_<NN>` | unstripped `.so` (**MANDATORY**) | `.so` / `.apk` | `ndk-stack`, `addr2line`, LLDB |
 
 > **Rule**: always ship/save symbols separately. Strip binary for users, keep unstripped + symbols for debugging.
+> **Rule**: symbols must match the EXACT build. One recompile = old symbols are garbage.
 
 ---
 
@@ -196,11 +204,13 @@ watchpoint set expression -- *(int*)0x7fff1234
 | File | Purpose | Required? |
 |------|---------|-----------|
 | `crash.dmp` | The minidump itself | ✅ Yes |
-| `myapp.pdb` | Debug symbols — function names, line numbers, locals | ✅ **Critical** |
-| `myapp.exe` | The exact binary that crashed | ⚠️ Recommended |
+| **`myapp.exe`** | **The exact binary that crashed — LLDB needs it as target** | ✅ **MANDATORY** |
+| **`myapp.pdb`** | **Debug symbols — function names, line numbers, locals** | ✅ **MANDATORY** |
 | `ntdll.pdb`, `kernel32.pdb` | OS symbols (auto-fetched by WinDbg) | ⚠️ For OS frames |
 
-> **PDB must match the exact build.** Even one recompile invalidates the PDB. Store PDBs in a symbol server or alongside each release.
+> ⚠️ **Without the `.exe`, LLDB has no target → no PDB loaded → backtrace is raw hex.**
+> ⚠️ **Without the `.pdb`, LLDB has target but no symbols → backtrace is module+offset, not function names.**
+> ⚠️ **PDB must match the exact build.** Even one recompile invalidates the PDB. Store PDBs in a symbol server or alongside each release.
 
 #### Generate minidumps from code
 
@@ -260,33 +270,50 @@ Set-ItemProperty -Path "$regPath\myapp.exe" -Name "DumpType" -Value 2
 Remove-Item $regPath -Recurse
 ```
 
-#### Analyze with LLDB
+#### Analyze with LLDB — the correct way
 
 ```bash
-# LLDB opens minidumps directly
-lldb -c crash.dmp
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ⚠️ YOU MUST PROVIDE THE EXECUTABLE (-e flag)!
+# Without -e, LLDB has no target → no PDB → useless output
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Point LLDB to your PDB (if not in same dir):
-(lldb) settings set target.exec-search-paths "C:\path\to\pdbs"
+# THE COMMAND — exe as target, dump as core:
+lldb myapp.exe -c crash.dmp
 
-# Or load symbols explicitly:
-(lldb) target symbols add myapp.pdb
+# Or equivalently with long flags:
+lldb --file myapp.exe --core crash.dmp
+
+# If PDB not next to exe, tell LLDB where to look:
+(lldb) settings set symbols.exec-search-paths "C:\path\to\pdbs"
+
+# Or load PDB explicitly:
+(lldb) target symbols add C:\builds\release\myapp.pdb
+
+# Verify symbols loaded:
+(lldb) image list myapp.exe                  # should show PDB path
+# If it says "No debug info" → PDB missing or mismatched. Fix it.
 
 # Essential commands inside dump session:
-(lldb) bt                                   # backtrace at crash point
-(lldb) thread list                          # all threads at crash
-(lldb) thread select 1                      # switch thread
-(lldb) bt                                   # that thread's backtrace
-(lldb) bt all                               # ALL threads at once
-(lldb) frame variable                       # locals at crash frame
-(lldb) frame variable -a                    # locals with addresses
-(lldb) image list                           # loaded modules + base addresses
-(lldb) image lookup -a 0x7FF61234           # address → symbol
-(lldb) memory read -count 128 0x7fff0000    # read memory from dump
-(lldb) memory read -format x 0x7fff0000     # hex dump
-(lldb) disassemble -n crashed_function      # disasm from symbols
-(lldb) register read                        # CPU registers at crash
+(lldb) bt                                    # backtrace at crash point
+(lldb) bt all                                # ALL threads at once
+(lldb) thread list                           # all threads at crash
+(lldb) thread select 1                       # switch thread
+(lldb) bt                                    # that thread's backtrace
+(lldb) frame variable                        # locals at crash frame
+(lldb) frame variable -a                     # locals with addresses
+(lldb) frame select 3                        # jump to frame 3
+(lldb) frame variable                        # locals at frame 3
+(lldb) image list                            # loaded modules + base addresses
+(lldb) image lookup -a 0x7FF61234            # address → symbol
+(lldb) memory read -count 128 0x7fff0000     # read memory from dump
+(lldb) memory read -format x 0x7fff0000      # hex dump
+(lldb) disassemble -n crashed_function       # disasm from symbols
+(lldb) register read                         # CPU registers at crash
+(lldb) expr (int)some_global                 # evaluate expression (if memory present)
 ```
+
+> 💡 **Common mistake**: running `lldb -c crash.dmp` alone. This opens the dump but with NO target binary. You'll see `ntdll!NtWaitForSingleObject+0x1a` instead of `MyClass::processData() line 42`. **Always use `lldb myapp.exe -c crash.dmp`.**
 
 #### Analyze with WinDbg (deeper Windows analysis)
 
@@ -295,11 +322,18 @@ lldb -c crash.dmp
 # Or scoop: scoop install windbg (if available)
 windbg -z crash.dmp
 
+# WinDbg auto-finds the exe from dump metadata.
+# But you still need PDBs:
+
 # First things to run:
 .sympath srv*https://msdl.microsoft.com/download/symbols   # Microsoft symbol server
 .sympath+ C:\path\to\your\pdbs                              # add YOUR symbols
 .reload /f                                                   # force reload symbols
 !analyze -v                                                  # auto-analysis (BEST first step)
+
+# Verify symbols loaded:
+lm vm myapp                                                   # check "pdb" column shows your PDB path
+# If "exported symbols" → no PDB. Fix path.
 
 # Key WinDbg commands:
 kb                                          # call stack with params
@@ -332,24 +366,26 @@ dt ntdll!_TEB                               # dump TEB structure
 # Install: winget install Microsoft.WindowsSDK (includes cdb)
 
 # One-shot analysis (great for CI/scripts):
-cdb -z crash.dmp -c "!analyze -v; q"
+cdb -z crash.dmp -y "C:\path\to\pdbs" -c "!analyze -v; q"
+#     -z = dump file
+#     -y = symbol path (where to find PDBs!)
 
 # Batch: analyze all dumps in a folder
 Get-ChildItem C:\CrashDumps\*.dmp | ForEach-Object {
-    cdb -z $_.FullName -c "!analyze -v; q" | Out-File "$($_.BaseName).analysis.txt"
+    cdb -z $_.FullName -y "C:\path\to\pdbs" -c "!analyze -v; q" | Out-File "$($_.BaseName).analysis.txt"
 }
 
 # Dump all call stacks:
-cdb -z crash.dmp -c "~*kb; q"
+cdb -z crash.dmp -y "C:\path\to\pdbs" -c "~*kb; q"
 
 # Run debugger extension commands:
-cdb -z crash.dmp -c "!analyze -v; !heap -p -a <addr>; lm; q"
+cdb -z crash.dmp -y "C:\path\to\pdbs" -c "!analyze -v; !heap -p -a <addr>; lm; q"
 ```
 
 #### PDB management
 
 ```cmake
-# ALWAYS generate PDB in release builds
+# ALWAYS generate PDB in release builds — without PDB, crash dumps are useless
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi")
 set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
 
@@ -377,9 +413,11 @@ symstore add /r /f C:\build\*.pdb /s C:\SymbolStore /t "MyApp"
 | File | Purpose | Required? |
 |------|---------|-----------|
 | `core` or `core.<pid>` | The core dump | ✅ Yes |
-| Unstripped ELF binary | The exact binary with debug info | ✅ **Critical** |
+| **Unstripped ELF binary** | **The exact binary with debug info** | ✅ **MANDATORY** |
 | `.debug` files (separate debug) | Split debug symbols | ⚠️ If using split debug |
 | Shared `.so` with debug info | Library symbols for stack frames | ⚠️ For lib crashes |
+
+> ⚠️ **Binary must have debug info (`-g` flag at compile).** Stripped binary = no function names, no line numbers.
 
 #### Enable core dumps
 
@@ -407,7 +445,7 @@ coredumpctl dump <pid> -o core.<pid>        # extract to file
 #### Debug with GDB
 
 ```bash
-# Open core dump
+# THE COMMAND — binary + core:
 gdb ./myapp core.12345
 
 # Essential commands:
@@ -426,6 +464,11 @@ gdb ./myapp core.12345
 (gdb) print *my_ptr                          # dereference pointer
 (gdb) x/64xg 0x7fff0000                    # hex dump memory (64 giant words)
 
+# Verify debug info loaded:
+(gdb) info files                             # should show "Reading symbols from..."
+(gdb) info sharedlibrary                    # check "Syms Read" column = Yes
+# If "No debugging symbols found" → binary is stripped or compiled without -g. Fix it.
+
 # With systemd-coredump (auto-finds binary):
 coredumpctl gdb <pid>                       # opens GDB with correct binary + core
 ```
@@ -433,21 +476,27 @@ coredumpctl gdb <pid>                       # opens GDB with correct binary + co
 #### Debug with LLDB
 
 ```bash
-# Open core dump
-lldb -c core.12345 -e ./myapp
+# THE COMMAND — binary as target, core as dump:
+lldb ./myapp -c core.12345
 
-# Or if core_pattern has binary name:
-lldb -c core.12345
+# Or equivalently:
+lldb --file ./myapp --core core.12345
+
+# Verify symbols:
+(lldb) image list                            # check "myapp" shows debug info loaded
+# If no debug info → recompile with -g
 
 # Commands:
-(lldb) bt                                   # backtrace
-(lldb) bt all                               # all threads
-(lldb) frame variable                       # locals
-(lldb) thread list                          # all threads
-(lldb) image list                           # loaded shared libs
-(lldb) disassemble -n main                  # disasm function
-(lldb) memory read -count 128 0x7fff0000   # read memory
-(lldb) register read                        # registers at crash
+(lldb) bt                                    # backtrace
+(lldb) bt all                                # all threads
+(lldb) frame variable                        # locals
+(lldb) frame select 3                        # jump to frame 3
+(lldb) frame variable                        # locals at frame 3
+(lldb) thread list                           # all threads
+(lldb) image list                            # loaded shared libs
+(lldb) disassemble -n main                   # disasm function
+(lldb) memory read -count 128 0x7fff0000    # read memory
+(lldb) register read                         # registers at crash
 ```
 
 #### Split debug symbols (keep small binaries, debug with full symbols)
@@ -460,6 +509,7 @@ objcopy --add-gnu-debuglink=myapp.debug myapp  # link debug file to stripped bin
 
 # Now GDB auto-loads myapp.debug when debugging myapp
 # Ship myapp to users, keep myapp.debug for crash analysis
+# Put myapp.debug next to myapp or in /usr/lib/debug/
 ```
 
 #### Core dump with GDB (generate from running process)
@@ -484,10 +534,11 @@ gcore -o myapp.core <pid>                   # generate core, process keeps runni
 | File | Purpose | Required? |
 |------|---------|-----------|
 | `.crash` or `.ips` | Crash report (text or binary plist) | ✅ Yes |
-| `.dSYM/` bundle | Debug symbols (DWARF) | ✅ **Critical** |
-| Mach-O binary | The exact binary that crashed | ✅ Yes |
+| **`.dSYM/` bundle** | **Debug symbols (DWARF)** | ✅ **MANDATORY** |
+| **Mach-O binary** | **The exact binary that crashed** | ✅ **MANDATORY** |
 
 > **dSYM must match exact build UUID.** Check with: `dwarfdump --uuid MyApp.app/MyApp` and `dwarfdump --uuid MyApp.app.dSYM`
+> ⚠️ **No dSYM = no function names.** The .ips file only has hex addresses. dSYM is what translates them.
 
 #### Generate dSYM (Xcode / CLI)
 
@@ -509,6 +560,7 @@ xcodebuild -project MyApp.xcodeproj -scheme MyApp \
 # Verify dSYM matches binary:
 dwarfdump --uuid MyApp.app/MyApp             # binary UUID
 dwarfdump --uuid MyApp.app.dSYM             # dSYM UUID — must match!
+# If UUIDs differ → dSYM is from wrong build. Useless.
 ```
 
 #### Find crash reports
@@ -529,20 +581,26 @@ cp ~/Library/Logs/DiagnosticReports/MyApp*.ips ~/Desktop/
 #### Analyze with LLDB
 
 ```bash
-# Open crash report with LLDB
-lldb -c MyApp-2024-01-15.ips
+# Open crash report with LLDB:
+lldb ./MyApp -c MyApp-2024-01-15.ips
 
-# If LLDB can't find symbols, point it:
+# If LLDB can't find dSYM, point it explicitly:
 (lldb) target symbols add /path/to/MyApp.app.dSYM/Contents/Resources/DWARF/MyApp
 
-# Commands:
-(lldb) bt                                   # backtrace
-(lldb) bt all                               # all threads
-(lldb) frame variable                       # locals
-(lldb) image list                           # loaded frameworks
-(lldb) image lookup -a 0x1234              # address → symbol
+# Verify:
+(lldb) image list MyApp                      # should show dSYM path
+# If "No debug info" → dSYM missing or UUID mismatch
 
-# Manual symbolication from .ips crash report:
+# Commands:
+(lldb) bt                                    # backtrace
+(lldb) bt all                                # all threads
+(lldb) frame variable                        # locals
+(lldb) frame select 5                        # jump to frame
+(lldb) frame variable                        # locals at that frame
+(lldb) image list                            # loaded frameworks
+(lldb) image lookup -a 0x1234               # address → symbol
+
+# Manual symbolication from .ips crash report (no LLDB needed):
 # .ips files have raw addresses. Use atos to symbolicate:
 atos -arch arm64 -o MyApp.app.dSYM/Contents/Resources/DWARF/MyApp -l 0x100000000 0x100004321
 # -l = load address from crash report, 0x100004321 = crash address
@@ -579,8 +637,10 @@ setrlimit(RLIMIT_CORE, &rl);
 | File | Purpose | Required? |
 |------|---------|-----------|
 | `.ips` / `.crash` | Device crash log | ✅ Yes |
-| `.dSYM/` bundle | Debug symbols from archived build | ✅ **Critical** |
-| `.app` binary | The Mach-O binary | ✅ Yes |
+| **`.dSYM/` bundle** | **Debug symbols from archived build** | ✅ **MANDATORY** |
+| **`.app` binary** | **The Mach-O binary** | ✅ **MANDATORY** |
+
+> ⚠️ **No dSYM = raw hex addresses.** iOS crash logs are useless without the exact dSYM from the build that produced the crash.
 
 #### Get crash logs from device
 
@@ -601,7 +661,7 @@ xcrun devicectl device info logs --device <device-id>
 #### Symbolicate iOS crash logs
 
 ```bash
-# Need: .ips crash log + .dSYM + .app binary
+# Need: .ips crash log + .dSYM + .app binary — ALL THREE
 
 # Method 1: xcrun symbolicatecrash
 export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
@@ -632,9 +692,9 @@ lldb
 (lldb) process connect connect://<device-ip>:1234
 (lldb) continue                              # run until crash
 # When crash happens:
-(lldb) bt                                   # backtrace at crash
-(lldb) bt all                               # all threads
-(lldb) frame variable                       # locals
+(lldb) bt                                    # backtrace at crash
+(lldb) bt all                                # all threads
+(lldb) frame variable                        # locals
 ```
 
 ---
@@ -646,10 +706,11 @@ lldb
 | File | Purpose | Required? |
 |------|---------|-----------|
 | `tombstone_<NN>` | Native crash log (text) | ✅ Yes |
-| Unstripped `.so` files | Debug symbols for native libs | ✅ **Critical** |
+| **Unstripped `.so` files** | **Debug symbols for native libs** | ✅ **MANDATORY** |
 | `app/build/intermediates/` | Intermediate build artifacts | ⚠️ Sometimes needed |
 
-> **Always keep unstripped .so files from release builds.** Gradle strips them for the APK but keeps originals in `obj/local/`.
+> ⚠️ **Always keep unstripped .so files from release builds.** Gradle strips them for the APK but keeps originals in `obj/local/`.
+> ⚠️ **No unstripped .so = ndk-stack shows `#00 pc 0x12345 libmyapp.so` with no function name.**
 
 #### Get tombstones from device
 
@@ -671,7 +732,7 @@ adb bugreport > bugreport.zip
 
 ```bash
 # ndk-stack reads logcat and replaces addresses with symbols
-# Needs path to unstripped .so files:
+# Needs path to unstripped .so files — THIS IS THE KEY:
 adb logcat | ndk-stack -sym app/build/intermediates/cmake/release/obj/arm64-v8a
 
 # Or from saved tombstone:
@@ -679,6 +740,9 @@ ndk-stack -sym path/to/unstripped/so/ -dump tombstone_00
 
 # With NDK installed:
 $ANDROID_NDK/ndk-stack -sym obj/local/arm64-v8a < tombstone_00
+
+# If ndk-stack shows raw addresses → wrong symbol path or stripped .so
+# Fix: point -sym to directory containing UNSTRIPPED .so files
 ```
 
 #### Symbolicate with addr2line
@@ -688,7 +752,10 @@ $ANDROID_NDK/ndk-stack -sym obj/local/arm64-v8a < tombstone_00
 $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-addr2line \
   -e libmyapp.so -f -C 0x12345
 
-# -f = function names, -C = demangle C++ names
+# -e = the UNSTRIPPED .so (not the one in the APK!)
+# -f = function names
+# -C = demangle C++ names
+# If output is "??" → .so is stripped or wrong file
 ```
 
 #### Debug with LLDB (Android NDK)
@@ -703,14 +770,14 @@ adb shell "/data/local/tmp/lldb-server platform --listen '*:1234' --server" &
 # Forward port:
 adb forward tcp:1234 tcp:1234
 
-# Connect from host:
+# Connect from host — with UNSTRIPPED .so as target:
 lldb
 (lldb) platform select remote-android
 (lldb) platform connect connect://localhost:1234
-(lldb) target create /path/to/unstripped/libmyapp.so
+(lldb) target create /path/to/UNSTRIPPED/libmyapp.so    # ← unstripped is critical!
 (lldb) process connect connect://localhost:1234
-(lldb) bt                                   # backtrace
-(lldb) frame variable                       # locals
+(lldb) bt                                                # backtrace
+(lldb) frame variable                                    # locals
 ```
 
 #### ProGuard / R8 mapping (Java/Kotlin crashes)
@@ -793,7 +860,7 @@ dump_syms myapp > myapp.sym
 minidump_stackwalk crash.dmp myapp.sym > analysis.txt
 
 # Or with LLDB (if minidump is standard Windows format):
-lldb -c crash.dmp
+lldb myapp.exe -c crash.dmp                  # ← still need exe as target!
 ```
 
 ---
@@ -832,18 +899,23 @@ WinDbg and LLDB both understand this format. Local cache avoids re-downloading.
 # 1. Build with symbols
 cmake --build build --config RelWithDebInfo
 
-# 2. Archive PDB/dSYM/debug files
+# 2. Archive PDB/dSYM/debug files — WITHOUT THESE, CRASH DUMPS ARE USELESS
 # Windows:
 mkdir symbols/release-1.2.3/
 cp build/Release/*.pdb symbols/release-1.2.3/
+cp build/Release/*.exe symbols/release-1.2.3/   # need exe too for LLDB!
 
 # macOS:
 mkdir symbols/release-1.2.3/
 cp -R build/Release/*.dSYM symbols/release-1.2.3/
+cp build/Release/MyApp symbols/release-1.2.3/   # need binary too!
 
 # Linux:
 mkdir symbols/release-1.2.3/
-cp build/myapp.debug symbols/release-1.2.3/  # or unstripped binary
+cp build/myapp symbols/release-1.2.3/            # unstripped binary = both binary + symbols
+# Or if using split debug:
+cp build/myapp.debug symbols/release-1.2.3/
+cp build/myapp.stripped symbols/release-1.2.3/
 
 # 3. Upload to artifact storage (S3, Azure Artifacts, GitHub Releases)
 # 4. Point debuggers at it
@@ -855,11 +927,11 @@ cp build/myapp.debug symbols/release-1.2.3/  # or unstripped binary
 
 | Build flag | Platform | Produces | Notes |
 |-----------|----------|----------|-------|
-| `/Zi` | MSVC | `.pdb` file | Add to Release builds! |
+| `/Zi` | MSVC | `.pdb` file | **Add to Release builds!** No PDB = no crash analysis |
 | `/DEBUG` (linker) | MSVC | Embeds PDB path in exe | Required for crash dumps |
-| `-g` | GCC/Clang | DWARF in binary | Linux/macOS |
-| `-g -gsplit-dwarf` | GCC | `.dwo` split files | Faster linking |
-| `DEBUG_INFORMATION_FORMAT=dwarf-with-dsym` | Xcode | `.dSYM/` bundle | Must archive! |
+| `-g` | GCC/Clang | DWARF in binary | Linux/macOS — **mandatory for core dump analysis** |
+| `-g -gsplit-dwarf` | GCC | `.dwo` split files | Faster linking, separate debug |
+| `DEBUG_INFORMATION_FORMAT=dwarf-with-dsym` | Xcode | `.dSYM/` bundle | **Must archive!** No dSYM = no symbolication |
 
 ```cmake
 # Cross-platform: always generate symbols in Release
@@ -929,9 +1001,9 @@ valgrind --tool=helgrind ./myapp
 
 void heavy() {
     ZoneScoped;                     // auto-named zone
-    ZoneScopedN("Physics");         // named zone
-    TracyPlot("FrameTime", dt);     // plot values
-    FrameMark;                      // mark frame
+    ZoneScopedN("Physics");         # named zone
+    TracyPlot("FrameTime", dt);     # plot values
+    FrameMark;                      # mark frame
 }
 ```
 
