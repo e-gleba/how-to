@@ -400,46 +400,53 @@ settings set target.process.stop-others false
 ### 💀 Crash dump debugging (all platforms)
 
 > Full cross-platform reference: [debugging-profiling.md](debugging-profiling.md) — Crash Dump section
+>
+> ⚠️ **Always provide the target binary!** Without it, no symbols resolve = raw hex addresses.
 
 ```bash
-# Windows — LLDB opens .dmp directly
-lldb -c crash.dmp
+# Windows — LLDB (exe as target, dump as core — BOTH required!)
+lldb myapp.exe -c crash.dmp
 (lldb) bt                                    # backtrace at crash
-(lldb) thread list                           # all threads
+(lldb) bt all                                # all threads
 (lldb) frame variable                        # locals
 
-# Windows — WinDbg for deeper analysis
+# Windows — WinDbg for deeper analysis (auto-finds exe from dump)
 windbg -z crash.dmp
+.sympath+ C:\path\to\pdbs                    # add YOUR PDBs!
 !analyze -v                                  # auto-analysis
 kb                                           # call stack with params
 
-# Linux — GDB core dump
+# Linux — GDB core dump (binary + core — BOTH required!)
 gdb ./myapp core.12345
 (gdb) bt full                                # backtrace + locals
 (gdb) thread apply all bt full               # all threads
 
-# Linux — coredumpctl (systemd)
+# Linux — coredumpctl (systemd — auto-finds binary + core)
 coredumpctl list                             # captured cores
-coredumpctl gdb <pid>                        # auto-finds binary + core
+coredumpctl gdb <pid>                        # opens GDB with correct binary + core
 
-# macOS — crash report
-lldb -c MyApp-2024-01-15.ips
+# Linux — LLDB (binary + core — BOTH required!)
+lldb ./myapp -c core.12345
 (lldb) bt
 
-# Android — tombstone symbolication
+# macOS — crash report (binary + report — BOTH required!)
+lldb ./MyApp -c MyApp-2024-01-15.ips
+(lldb) bt
+
+# Android — tombstone symbolication (unstripped .so path is critical!)
 adb logcat | ndk-stack -sym obj/local/arm64-v8a
 
-# iOS — symbolicate crash log
+# iOS — symbolicate crash log (dSYM is critical!)
 xcrun symbolicatecrash crash.ips MyApp.app.dSYM > symbolicated.crash
 ```
 
-| Platform | Dump | Symbols | Tool |
-|----------|------|---------|------|
-| Windows | `.dmp` | `.pdb` | LLDB, WinDbg, cdb |
-| Linux | `core` | unstripped binary / `.debug` | GDB, LLDB, coredumpctl |
-| macOS | `.crash` / `.ips` | `.dSYM/` | LLDB, atos |
-| iOS | `.ips` | `.dSYM/` | symbolicatecrash, LLDB |
-| Android | `tombstone` | unstripped `.so` | ndk-stack, addr2line, LLDB |
+| Platform | Dump | Symbols | Binary needed | Tool |
+|----------|------|---------|---------------|------|
+| Windows | `.dmp` | `.pdb` (**MANDATORY**) | `.exe` (**MANDATORY**) | LLDB, WinDbg, cdb |
+| Linux | `core` | unstripped binary / `.debug` | ELF binary | GDB, LLDB, coredumpctl |
+| macOS | `.crash` / `.ips` | `.dSYM/` (**MANDATORY**) | Mach-O binary | LLDB, atos |
+| iOS | `.ips` | `.dSYM/` (**MANDATORY**) | `.app` binary | symbolicatecrash, LLDB |
+| Android | `tombstone` | unstripped `.so` (**MANDATORY**) | `.so` files | ndk-stack, addr2line, LLDB |
 
 ### Sanitizers ([ASan/UBSan/TSan docs](https://github.com/google/sanitizers/wiki))
 ```bash
@@ -831,7 +838,7 @@ const char* glyph = SteamInput()->GetGlyphForActionOrigin(origin);
 # Static CRT (no vcruntime.dll dependency)
 cmake -B build -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>"
 
-# PDB in release (crash dumps work)
+# PDB in release (crash dumps work — without PDB, crash analysis is impossible)
 cmake -B build -DCMAKE_CXX_FLAGS_RELEASE="/Zi" -DCMAKE_EXE_LINKER_FLAGS_RELEASE="/DEBUG /OPT:REF /OPT:ICF"
 ```
 
@@ -854,6 +861,9 @@ scoop install windows-terminal
 
 # Install PowerToys
 scoop install powertoys
+
+# Install coreutils (Unix tools in PowerShell)
+scoop install uutils-coreutils
 ```
 
 | Shortcut | Action |
@@ -940,8 +950,8 @@ case SDL_EVENT_GAMEPAD_REMOVED: SDL_CloseGamepad(gp); gp = nullptr; break;
 // Per-frame:
 SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_SOUTH);  // A/Cross
 SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX);      // left stick X
-SDL_RumbleGamepad(gp, low, high, ms);                 // vibration
-SDL_GetPowerInfo(&secs, &pct);                        // battery %
+SDL_RumbleGamepad(gp, low, high, ms);                 # vibration
+SDL_GetPowerInfo(&secs, &pct);                        # battery %
 ```
 
 ### USB device listing
@@ -999,14 +1009,14 @@ PROFILE:   tracy-profiler & ./myapp
 DEBUG:     gdb -tui ./myapp  |  lldb ./myapp
 THREADS:   set scheduler-locking on         (GDB: freeze all threads except current)
 REVERSE:   target record-full → reverse-step (GDB: step BACKWARDS in time)
-WIN DUMP:  lldb -c crash.dmp → bt           (LLDB: open Windows crash dump)
-WIN DUMP:  windbg -z crash.dmp → !analyze -v (WinDbg: deep Windows analysis)
-LNX DUMP:  gdb ./myapp core → bt full       (GDB: Linux core dump)
+WIN DUMP:  lldb myapp.exe -c crash.dmp → bt (LLDB: exe + dump + PDB all needed!)
+WIN DUMP:  windbg -z crash.dmp → !analyze -v (WinDbg: add .sympath+ for YOUR PDBs)
+LNX DUMP:  gdb ./myapp core → bt full       (GDB: binary + core both needed!)
 LNX DUMP:  coredumpctl gdb <pid>            (systemd: auto-finds binary + core)
-MAC DUMP:  lldb -c MyApp.ips → bt          (LLDB: macOS crash report)
-IOS DUMP:  xcrun symbolicatecrash crash.ips App.dSYM  (iOS: symbolicate)
-AND DUMP:  ndk-stack -sym obj/local/arm64-v8a < tombstone  (Android: symbolicate)
-SYMBOLS:   Always archive PDB/dSYM/.debug per release — crash analysis depends on them!
+MAC DUMP:  lldb ./MyApp -c App.ips → bt    (LLDB: binary + report both needed!)
+IOS DUMP:  xcrun symbolicatecrash crash.ips App.dSYM  (iOS: dSYM MANDATORY)
+AND DUMP:  ndk-stack -sym obj/local/arm64-v8a < tombstone  (Android: unstripped .so MANDATORY)
+SYMBOLS:   Archive PDB/dSYM/.debug + binary per release — no symbols = raw hex, useless!
 NETWORK:   nc -zv host 443 -w 3             (is port open?)
 CAPTURE:   sudo tcpdump -i any port 8080 -w cap.pcap
 TLS DEBUG: export SSLKEYLOGFILE=~/sslkeys.log → Wireshark decrypts HTTPS
@@ -1068,10 +1078,10 @@ WRITE CODE ──► lazygit commit ─────────► cppcheck + cl
                                ▼
                           Ghidra/r2/x64dbg (when you need to go deeper)
                                ▼
-                          💀 crash dump analysis (all platforms)
-                          Win: lldb -c crash.dmp / windbg !analyze -v
+                          💀 crash dump analysis (BINARY + SYMBOLS + DUMP)
+                          Win: lldb myapp.exe -c crash.dmp / windbg !analyze -v
                           Lnx: gdb ./app core / coredumpctl gdb
-                          Mac: lldb -c App.ips / symbolicatecrash
+                          Mac: lldb ./App -c App.ips / symbolicatecrash
                           And: ndk-stack -sym obj/local/arm64-v8a
                           iOS: xcrun symbolicatecrash + dSYM
                                ▼
