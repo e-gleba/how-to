@@ -170,11 +170,39 @@ watchpoint set expression -- *(int*)0x7fff1234
 
 ---
 
-## Windows Crash Minidumps + LLDB
+## 💀 Crash Dump Debugging — Ultimate Cross-Platform Reference
 
-> **Did you know?** LLDB on Windows can read minidumps. Generate them programmatically or catch crashes automatically.
+> The art of post-mortem debugging: your app crashed, you have a dump file, now find out why.
+> Every platform has its own dump format, tools, and symbol requirements. This section covers them all.
 
-### Generate minidumps
+### What files do you need?
+
+| Platform | Dump file | Symbols file | Binary | Tool |
+|----------|-----------|-------------|--------|------|
+| **Windows** | `.dmp` (minidump) | `.pdb` | `.exe` / `.dll` | LLDB, WinDbg, cdb |
+| **Linux** | `core` / `core.<pid>` | `.debug` or unstripped binary | ELF binary | GDB, LLDB |
+| **macOS** | `.crash` / `.ips` | `.dSYM/` bundle | Mach-O binary | LLDB, Console.app |
+| **iOS** | `.ips` / `.crash` | `.dSYM/` bundle | Mach-O binary | LLDB, Xcode Organizer |
+| **Android** | `tombstone_<NN>` | unstripped `.so` | `.so` / `.apk` | `ndk-stack`, `addr2line`, LLDB |
+
+> **Rule**: always ship/save symbols separately. Strip binary for users, keep unstripped + symbols for debugging.
+
+---
+
+### 🪟 Windows — Minidumps (.dmp) + PDB
+
+#### Files needed
+
+| File | Purpose | Required? |
+|------|---------|-----------|
+| `crash.dmp` | The minidump itself | ✅ Yes |
+| `myapp.pdb` | Debug symbols — function names, line numbers, locals | ✅ **Critical** |
+| `myapp.exe` | The exact binary that crashed | ⚠️ Recommended |
+| `ntdll.pdb`, `kernel32.pdb` | OS symbols (auto-fetched by WinDbg) | ⚠️ For OS frames |
+
+> **PDB must match the exact build.** Even one recompile invalidates the PDB. Store PDBs in a symbol server or alongside each release.
+
+#### Generate minidumps from code
 
 ```cpp
 // In your app — write minidump on crash
@@ -183,7 +211,14 @@ watchpoint set expression -- *(int*)0x7fff1234
 #pragma comment(lib, "dbghelp.lib")
 
 LONG WINAPI CrashHandler(EXCEPTION_POINTERS* ep) {
-    HANDLE file = CreateFileA("crash.dmp", GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+    // Include timestamp in filename
+    char path[MAX_PATH];
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    snprintf(path, sizeof(path), "crash_%04d%02d%02d_%02d%02d%02d.dmp",
+             st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+
+    HANDLE file = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
     MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file,
                       MiniDumpWithFullMemory, ep, NULL, NULL);
     CloseHandle(file);
@@ -194,52 +229,646 @@ LONG WINAPI CrashHandler(EXCEPTION_POINTERS* ep) {
 SetUnhandledExceptionFilter(CrashHandler);
 ```
 
-### Analyze minidumps with LLDB (Windows)
+Minidump size options:
+
+| Flag | Size | Contains |
+|------|------|----------|
+| `MiniDumpNormal` | ~100 KB | Threads, stacks, loaded modules |
+| `MiniDumpWithFullMemory` | ~RAM size | Everything — full process memory |
+| `MiniDumpWithHandleData` | +10-50 MB | All handles (files, mutexes, events) |
+| `MiniDumpWithThreadInfo` | +few MB | Thread times, priorities |
+
+> 💡 Use `MiniDumpNormal` for telemetry uploads, `MiniDumpWithFullMemory` for local debugging.
+
+#### Windows auto crash dumps (registry — no code changes!)
+
+```powershell
+# Enable LocalDumps — ANY app crash auto-generates .dmp
+$regPath = "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"
+New-Item -Path $regPath -Force
+Set-ItemProperty -Path $regPath -Name "DumpFolder" -Value "C:\CrashDumps" -Type ExpandString
+Set-ItemProperty -Path $regPath -Name "DumpType" -Value 2       # 2 = Full dump, 1 = Mini, 0 = Custom
+Set-ItemProperty -Path $regPath -Name "DumpCount" -Value 5       # max dumps to keep
+
+# Per-app override (optional):
+New-Item -Path "$regPath\myapp.exe" -Force
+Set-ItemProperty -Path "$regPath\myapp.exe" -Name "DumpFolder" -Value "C:\CrashDumps"
+Set-ItemProperty -Path "$regPath\myapp.exe" -Name "DumpType" -Value 2
+
+# Now ANY crash → C:\CrashDumps\myapp.exe.<pid>.dmp
+# Disable:
+Remove-Item $regPath -Recurse
+```
+
+#### Analyze with LLDB
 
 ```bash
-# LLDB can open minidumps directly
+# LLDB opens minidumps directly
 lldb -c crash.dmp
 
-# Inside LLDB:
+# Point LLDB to your PDB (if not in same dir):
+(lldb) settings set target.exec-search-paths "C:\path\to\pdbs"
+
+# Or load symbols explicitly:
+(lldb) target symbols add myapp.pdb
+
+# Essential commands inside dump session:
 (lldb) bt                                   # backtrace at crash point
 (lldb) thread list                          # all threads at crash
 (lldb) thread select 1                      # switch thread
 (lldb) bt                                   # that thread's backtrace
-(lldb) frame variable                       # locals at crash
-(lldb) image list                           # loaded modules
-(lldb) memory read -count 64 0x7fff0000     # read memory from dump
+(lldb) bt all                               # ALL threads at once
+(lldb) frame variable                       # locals at crash frame
+(lldb) frame variable -a                    # locals with addresses
+(lldb) image list                           # loaded modules + base addresses
+(lldb) image lookup -a 0x7FF61234           # address → symbol
+(lldb) memory read -count 128 0x7fff0000    # read memory from dump
+(lldb) memory read -format x 0x7fff0000     # hex dump
+(lldb) disassemble -n crashed_function      # disasm from symbols
+(lldb) register read                        # CPU registers at crash
 ```
 
-### Analyze with WinDbg (more powerful for Windows dumps)
+#### Analyze with WinDbg (deeper Windows analysis)
 
 ```powershell
 # Install: winget install Microsoft.WinDbg
+# Or scoop: scoop install windbg (if available)
 windbg -z crash.dmp
 
-# Key commands:
-!analyze -v                                 # auto-analysis (best first step)
+# First things to run:
+.sympath srv*https://msdl.microsoft.com/download/symbols   # Microsoft symbol server
+.sympath+ C:\path\to\your\pdbs                              # add YOUR symbols
+.reload /f                                                   # force reload symbols
+!analyze -v                                                  # auto-analysis (BEST first step)
+
+# Key WinDbg commands:
 kb                                          # call stack with params
 !peb                                        # process environment block
 !teb                                        # thread environment block
-!heap -p -a <address>                       # analyze heap allocation
+!heap -p -a <address>                       # analyze heap allocation at address
 lm                                          # loaded modules
 dv                                          # local variables
-dt ntdll!_PEB                               # dump structure
+dt ntdll!_PEB                               # dump PEB structure
+dt ntdll!_TEB                               # dump TEB structure
+!locks                                      # held locks (deadlock detection)
+!handle                                     # open handles
+~*kb                                        # all thread call stacks
+
+# Switch threads:
+~0s                                         # switch to thread 0
+~3s                                         # switch to thread 3
+~*kb                                        # all threads backtrace
+
+# Script: dump all thread stacks to file:
+.logopen C:\debug_stacks.txt
+~*kb
+.logclose
 ```
 
-### Windows automatic crash dumps (registry)
+#### Analyze with cdb (CLI WinDbg — scriptable)
 
 ```powershell
-# Enable LocalDumps (no code changes needed!)
-$regPath = "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"
-New-Item -Path $regPath -Force
-Set-ItemProperty -Path $regPath -Name "DumpFolder" -Value "C:\CrashDumps" -Type ExpandString
-Set-ItemProperty -Path $regPath -Name "DumpType" -Value 2  # Full dump
-Set-ItemProperty -Path $regPath -Name "DumpCount" -Value 5
+# cdb = CLI version of WinDbg, ships with Debugging Tools for Windows
+# Install: winget install Microsoft.WindowsSDK (includes cdb)
 
-# Now ANY crash auto-generates a .dmp in C:\CrashDumps
-# Disable:
-Remove-Item $regPath -Recurse
+# One-shot analysis (great for CI/scripts):
+cdb -z crash.dmp -c "!analyze -v; q"
+
+# Batch: analyze all dumps in a folder
+Get-ChildItem C:\CrashDumps\*.dmp | ForEach-Object {
+    cdb -z $_.FullName -c "!analyze -v; q" | Out-File "$($_.BaseName).analysis.txt"
+}
+
+# Dump all call stacks:
+cdb -z crash.dmp -c "~*kb; q"
+
+# Run debugger extension commands:
+cdb -z crash.dmp -c "!analyze -v; !heap -p -a <addr>; lm; q"
+```
+
+#### PDB management
+
+```cmake
+# ALWAYS generate PDB in release builds
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
+
+# Separate PDB from exe (for distribution):
+# Build produces: myapp.exe + myapp.pdb
+# Ship: myapp.exe (to users)
+# Store: myapp.pdb (on symbol server for crash analysis)
+```
+
+```powershell
+# Symbol server (local) — organize PDBs by hash
+# symstore from Windows SDK:
+symstore add /r /f C:\build\*.pdb /s C:\SymbolStore /t "MyApp"
+
+# Point WinDbg/LLDB at it:
+.sympath+ C:\SymbolStore
+```
+
+---
+
+### 🐧 Linux — Core Dumps + GDB/LLDB
+
+#### Files needed
+
+| File | Purpose | Required? |
+|------|---------|-----------|
+| `core` or `core.<pid>` | The core dump | ✅ Yes |
+| Unstripped ELF binary | The exact binary with debug info | ✅ **Critical** |
+| `.debug` files (separate debug) | Split debug symbols | ⚠️ If using split debug |
+| Shared `.so` with debug info | Library symbols for stack frames | ⚠️ For lib crashes |
+
+#### Enable core dumps
+
+```bash
+# Check current limit
+ulimit -c                                   # 0 = disabled
+
+# Enable for current session
+ulimit -c unlimited
+
+# Permanent (systemd — modern distros):
+# /etc/systemd/system.conf:
+# DefaultLimitCORE=infinity
+
+# Where do cores go? Check:
+cat /proc/sys/kernel/core_pattern
+# Common: core, core.%p, |/usr/lib/systemd/systemd-coredump %p ...
+
+# If using systemd-coredump:
+coredumpctl list                            # all captured cores
+coredumpctl info <pid>                      # details
+coredumpctl dump <pid> -o core.<pid>        # extract to file
+```
+
+#### Debug with GDB
+
+```bash
+# Open core dump
+gdb ./myapp core.12345
+
+# Essential commands:
+(gdb) bt                                    # backtrace at crash
+(gdb) bt full                               # backtrace + all locals at every frame
+(gdb) thread apply all bt                   # ALL threads
+(gdb) thread apply all bt full              # ALL threads with locals
+(gdb) info threads                          # thread list with state
+(gdb) frame 5                               # jump to frame 5
+(gdb) info locals                           # locals in current frame
+(gdb) info args                             # function arguments
+(gdb) list                                  # source code around crash
+(gdb) disassemble                           # assembly at crash point
+(gdb) info registers                        # CPU registers
+(gdb) print my_var                          # print variable
+(gdb) print *my_ptr                          # dereference pointer
+(gdb) x/64xg 0x7fff0000                    # hex dump memory (64 giant words)
+
+# With systemd-coredump (auto-finds binary):
+coredumpctl gdb <pid>                       # opens GDB with correct binary + core
+```
+
+#### Debug with LLDB
+
+```bash
+# Open core dump
+lldb -c core.12345 -e ./myapp
+
+# Or if core_pattern has binary name:
+lldb -c core.12345
+
+# Commands:
+(lldb) bt                                   # backtrace
+(lldb) bt all                               # all threads
+(lldb) frame variable                       # locals
+(lldb) thread list                          # all threads
+(lldb) image list                           # loaded shared libs
+(lldb) disassemble -n main                  # disasm function
+(lldb) memory read -count 128 0x7fff0000   # read memory
+(lldb) register read                        # registers at crash
+```
+
+#### Split debug symbols (keep small binaries, debug with full symbols)
+
+```bash
+# Extract debug info to separate file
+objcopy --only-keep-debug myapp myapp.debug
+strip myapp                                  # remove debug info from binary
+objcopy --add-gnu-debuglink=myapp.debug myapp  # link debug file to stripped binary
+
+# Now GDB auto-loads myapp.debug when debugging myapp
+# Ship myapp to users, keep myapp.debug for crash analysis
+```
+
+#### Core dump with GDB (generate from running process)
+
+```bash
+# Attach and generate core without killing process
+gdb -p <pid>
+(gdb) generate-core-file
+(gdb) detach
+(gdb) quit
+
+# Or: gcore (ships with GDB)
+gcore -o myapp.core <pid>                   # generate core, process keeps running
+```
+
+---
+
+### 🍎 macOS — Crash Reports + LLDB
+
+#### Files needed
+
+| File | Purpose | Required? |
+|------|---------|-----------|
+| `.crash` or `.ips` | Crash report (text or binary plist) | ✅ Yes |
+| `.dSYM/` bundle | Debug symbols (DWARF) | ✅ **Critical** |
+| Mach-O binary | The exact binary that crashed | ✅ Yes |
+
+> **dSYM must match exact build UUID.** Check with: `dwarfdump --uuid MyApp.app/MyApp` and `dwarfdump --uuid MyApp.app.dSYM`
+
+#### Generate dSYM (Xcode / CLI)
+
+```bash
+# Xcode project — enable in Build Settings:
+# Debug Information Format = "DWARF with dSYM File" (DEBUG_INFORMATION_FORMAT=dwarf-with-dsym)
+
+# CLI build:
+xcodebuild -project MyApp.xcodeproj -scheme MyApp \
+  -configuration Release \
+  DEBUG_INFORMATION_FORMAT=dwarf-with-dsym \
+  build
+
+# dSYM appears in build products dir
+# Archive it! You'll need it for crash analysis later
+```
+
+```bash
+# Verify dSYM matches binary:
+dwarfdump --uuid MyApp.app/MyApp             # binary UUID
+dwarfdump --uuid MyApp.app.dSYM             # dSYM UUID — must match!
+```
+
+#### Find crash reports
+
+```bash
+# User crash reports:
+ls ~/Library/Logs/DiagnosticReports/
+
+# System crash reports:
+ls /Library/Logs/DiagnosticReports/
+
+# Console.app → Crash Reports (GUI)
+
+# Copy .crash/.ips file for analysis
+cp ~/Library/Logs/DiagnosticReports/MyApp*.ips ~/Desktop/
+```
+
+#### Analyze with LLDB
+
+```bash
+# Open crash report with LLDB
+lldb -c MyApp-2024-01-15.ips
+
+# If LLDB can't find symbols, point it:
+(lldb) target symbols add /path/to/MyApp.app.dSYM/Contents/Resources/DWARF/MyApp
+
+# Commands:
+(lldb) bt                                   # backtrace
+(lldb) bt all                               # all threads
+(lldb) frame variable                       # locals
+(lldb) image list                           # loaded frameworks
+(lldb) image lookup -a 0x1234              # address → symbol
+
+# Manual symbolication from .ips crash report:
+# .ips files have raw addresses. Use atos to symbolicate:
+atos -arch arm64 -o MyApp.app.dSYM/Contents/Resources/DWARF/MyApp -l 0x100000000 0x100004321
+# -l = load address from crash report, 0x100004321 = crash address
+
+# Batch symbolicate entire crash report:
+xcrun symbolicatecrash MyApp.ips MyApp.app.dSYM > symbolicated.crash
+```
+
+#### Generate crash dump programmatically
+
+```cpp
+// macOS — generate Mach-O core dump
+#include <sys/resource.h>
+#include <signal.h>
+
+// Enable core dumps:
+struct rlimit rl;
+rl.rlim_cur = RLIM_INFINITY;
+rl.rlim_max = RLIM_INFINITY;
+setrlimit(RLIMIT_CORE, &rl);
+
+// Or use task_dump:
+// #include <mach/mach.h>
+// task_t task = mach_task_self();
+// Use vm_read_overwrite to dump memory regions
+```
+
+---
+
+### 📱 iOS — Crash Logs + LLDB
+
+#### Files needed
+
+| File | Purpose | Required? |
+|------|---------|-----------|
+| `.ips` / `.crash` | Device crash log | ✅ Yes |
+| `.dSYM/` bundle | Debug symbols from archived build | ✅ **Critical** |
+| `.app` binary | The Mach-O binary | ✅ Yes |
+
+#### Get crash logs from device
+
+```bash
+# Xcode 15+ (devicectl):
+xcrun devicectl device info logs --device <device-id>
+
+# Older method — Xcode Organizer:
+# Xcode → Window → Devices and Simulators → select device → View Device Logs
+
+# iTunes sync stores logs here:
+# macOS: ~/Library/Logs/CrashReporter/MobileDevice/<device-name>/
+# Windows: %APPDATA%\Apple Computer\Logs\CrashReporter\MobileDevice\
+
+# Copy .ips files for offline analysis
+```
+
+#### Symbolicate iOS crash logs
+
+```bash
+# Need: .ips crash log + .dSYM + .app binary
+
+# Method 1: xcrun symbolicatecrash
+export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+xcrun symbolicatecrash crash.ips MyApp.app.dSYM > symbolicated.crash
+
+# Method 2: atos (manual, one address at a time)
+# From crash report: Binary Images section → find load address
+# Then:
+atos -arch arm64 -o MyApp.app.dSYM/Contents/Resources/DWARF/MyApp \
+  -l 0x100000000 0x100004321
+
+# Method 3: Xcode Organizer (automatic)
+# Xcode → Window → Organizer → Crashes tab
+# Upload dSYM → Xcode symbolicates automatically
+```
+
+#### LLDB remote debug iOS crash
+
+```bash
+# Reproduce crash with debugger attached:
+xcrun devicectl device process launch --device <device-id> \
+  --start-stopped com.example.myapp
+
+# Connect LLDB:
+lldb
+(lldb) platform select remote-ios
+(lldb) platform connect connect://<device-ip>:1234
+(lldb) process connect connect://<device-ip>:1234
+(lldb) continue                              # run until crash
+# When crash happens:
+(lldb) bt                                   # backtrace at crash
+(lldb) bt all                               # all threads
+(lldb) frame variable                       # locals
+```
+
+---
+
+### 🤖 Android — Tombstones + NDK Stack
+
+#### Files needed
+
+| File | Purpose | Required? |
+|------|---------|-----------|
+| `tombstone_<NN>` | Native crash log (text) | ✅ Yes |
+| Unstripped `.so` files | Debug symbols for native libs | ✅ **Critical** |
+| `app/build/intermediates/` | Intermediate build artifacts | ⚠️ Sometimes needed |
+
+> **Always keep unstripped .so files from release builds.** Gradle strips them for the APK but keeps originals in `obj/local/`.
+
+#### Get tombstones from device
+
+```bash
+# Tombstones are in /data/tombstones/ (need root or adb root)
+adb root
+adb shell ls /data/tombstones/
+adb pull /data/tombstones/tombstone_00 .
+
+# Or from adb logcat (crash summary):
+adb logcat -d | grep -A 50 "tombstone"
+
+# Android 11+ — bugreport includes tombstones:
+adb bugreport > bugreport.zip
+# Extract: bugreport/tombstones/
+```
+
+#### Symbolicate with ndk-stack
+
+```bash
+# ndk-stack reads logcat and replaces addresses with symbols
+# Needs path to unstripped .so files:
+adb logcat | ndk-stack -sym app/build/intermediates/cmake/release/obj/arm64-v8a
+
+# Or from saved tombstone:
+ndk-stack -sym path/to/unstripped/so/ -dump tombstone_00
+
+# With NDK installed:
+$ANDROID_NDK/ndk-stack -sym obj/local/arm64-v8a < tombstone_00
+```
+
+#### Symbolicate with addr2line
+
+```bash
+# For individual addresses:
+$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-addr2line \
+  -e libmyapp.so -f -C 0x12345
+
+# -f = function names, -C = demangle C++ names
+```
+
+#### Debug with LLDB (Android NDK)
+
+```bash
+# Start lldb-server on device:
+adb push $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux/aarch64/lldb-server \
+  /data/local/tmp/
+adb shell chmod 755 /data/local/tmp/lldb-server
+adb shell "/data/local/tmp/lldb-server platform --listen '*:1234' --server" &
+
+# Forward port:
+adb forward tcp:1234 tcp:1234
+
+# Connect from host:
+lldb
+(lldb) platform select remote-android
+(lldb) platform connect connect://localhost:1234
+(lldb) target create /path/to/unstripped/libmyapp.so
+(lldb) process connect connect://localhost:1234
+(lldb) bt                                   # backtrace
+(lldb) frame variable                       # locals
+```
+
+#### ProGuard / R8 mapping (Java/Kotlin crashes)
+
+```bash
+# If using R8/ProGuard, need mapping.txt to deobfuscate Java stack traces
+# Found in: app/build/outputs/mapping/release/mapping.txt
+
+# Deobfuscate:
+$ANDROID_HOME/tools/proguard/bin/retrace.sh mapping.txt obfuscated_trace.txt
+```
+
+---
+
+### 🔧 Cross-Platform: Breakpad & Crashpad
+
+> Google's open-source crash reporting. Used by Chrome, Electron, VS Code, Discord, and many games.
+
+#### Crashpad (modern, recommended)
+
+```cpp
+// Integrate Crashpad (successor to Breakpad)
+#include "client/crashpad_client.h"
+#include "client/settings.h"
+#include "client/crash_report_database.h"
+
+bool InitializeCrashpad() {
+    base::FilePath db_path("crashpad_db");
+    auto database = crashpad::CrashReportDatabase::Initialize(db_path);
+
+    crashpad::CrashpadClient client;
+    std::map<std::string, std::string> annotations;
+    annotations["version"] = "1.0.0";
+    annotations["build"] = "release";
+
+    std::vector<std::string> arguments;
+    return client.StartHandler(
+        base::FilePath("crashpad_handler"),  // handler binary
+        db_path,
+        base::FilePath(),                     // metrics dir
+        "https://your-crash-server.com/upload",
+        annotations,
+        arguments,
+        true,                                 // restart on crash
+        true                                  // asynchronous start
+    );
+}
+
+// In main():
+InitializeCrashpad();
+// Now all crashes auto-upload to your server
+```
+
+#### Breakpad (legacy but still used)
+
+```cpp
+#include "client/windows/handler/exception_handler.h"
+
+// Windows:
+google_breakpad::ExceptionHandler eh(
+    L"crashdumps",                            // dump directory
+    NULL,                                     // filter callback
+    NULL,                                     // minidump callback
+    NULL,                                     // callback context
+    google_breakpad::ExceptionHandler::HANDLER_ALL
+);
+
+// On crash: crashdumps/<guid>.dmp is generated
+// Upload with symupload tool:
+// symupload myapp.pdb https://symbols.example.com/
+```
+
+#### Minidump analysis (Breakpad/Crashpad format)
+
+```bash
+# dump_syms — extract symbols from binary into Breakpad format
+dump_syms myapp > myapp.sym
+
+# minidump_stackwalk — analyze dump with symbols
+minidump_stackwalk crash.dmp myapp.sym > analysis.txt
+
+# Or with LLDB (if minidump is standard Windows format):
+lldb -c crash.dmp
+```
+
+---
+
+### 📊 Symbol Server Setup
+
+> Centralized symbol storage — upload once, debug anywhere.
+
+#### Microsoft Symbol Server format (Symsrv)
+
+```
+srv*C:\LocalCache*https://msdl.microsoft.com/download/symbols
+```
+
+WinDbg and LLDB both understand this format. Local cache avoids re-downloading.
+
+#### Local symbol server
+
+```bash
+# Organize symbols by GUID + filename (Symsrv format):
+# C:\SymbolStore\myapp.pdb\ABCDEF1234567890\myapp.pdb
+
+# Add to WinDbg search path:
+.sympath srv*C:\SymbolStore
+.sympath+ srv*https://msdl.microsoft.com/download/symbols
+.reload /f
+
+# Add to LLDB:
+(lldb) settings set symbols.exec-search-paths /path/to/symbols
+```
+
+#### CI/CD: archive symbols on every release
+
+```bash
+# In your release pipeline:
+# 1. Build with symbols
+cmake --build build --config RelWithDebInfo
+
+# 2. Archive PDB/dSYM/debug files
+# Windows:
+mkdir symbols/release-1.2.3/
+cp build/Release/*.pdb symbols/release-1.2.3/
+
+# macOS:
+mkdir symbols/release-1.2.3/
+cp -R build/Release/*.dSYM symbols/release-1.2.3/
+
+# Linux:
+mkdir symbols/release-1.2.3/
+cp build/myapp.debug symbols/release-1.2.3/  # or unstripped binary
+
+# 3. Upload to artifact storage (S3, Azure Artifacts, GitHub Releases)
+# 4. Point debuggers at it
+```
+
+---
+
+### 🔑 Debug Symbols Quick Reference
+
+| Build flag | Platform | Produces | Notes |
+|-----------|----------|----------|-------|
+| `/Zi` | MSVC | `.pdb` file | Add to Release builds! |
+| `/DEBUG` (linker) | MSVC | Embeds PDB path in exe | Required for crash dumps |
+| `-g` | GCC/Clang | DWARF in binary | Linux/macOS |
+| `-g -gsplit-dwarf` | GCC | `.dwo` split files | Faster linking |
+| `DEBUG_INFORMATION_FORMAT=dwarf-with-dsym` | Xcode | `.dSYM/` bundle | Must archive! |
+
+```cmake
+# Cross-platform: always generate symbols in Release
+if(MSVC)
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi")
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
+else()
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g")
+endif()
 ```
 
 ---
